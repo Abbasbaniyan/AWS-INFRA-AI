@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Infrastructure AI Assistant | CloudOps Control Plane</title>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+            .ai-prompts-slider::-webkit-scrollbar {
+        height: 4px;
+        }
+        .ai-prompts-slider::-webkit-scrollbar-track {
+        background: transparent;
+        }
+        .ai-prompts-slider::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 4px;
+        }
+    :root {
+      --bg-base: #070b14;
+      --bg-surface: #0e1526;
+      --bg-card: rgba(16, 24, 44, 0.85);
+      --border-glass: rgba(255, 255, 255, 0.08);
+      --border-focus: #38bdf8;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-cyan: #38bdf8;
+      --accent-blue: #3b82f6;
+      --accent-indigo: #6366f1;
+      --accent-purple: #a855f7;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #ef4444;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+      --shadow-subtle: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+      --shadow-glow-cyan: 0 0 20px rgba(56, 189, 248, 0.25);
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      line-height: 1.5;
+      overflow-x: hidden;
+      height: 100vh;
+    }
+
+    .app-layout { display: flex; height: 100vh; width: 100vw; overflow: hidden; position: relative; }
+    .glass-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-subtle);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .glass-card:hover { border-color: rgba(255, 255, 255, 0.14); }
+
+    /* Sidebar Navigation */
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: rgba(11, 17, 33, 0.95);
+      border-right: 1px solid var(--border-glass);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      z-index: 20;
+    }
+    .sidebar-header {
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-glass);
+    }
+    .logo-box {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-glow-cyan);
+    }
+    .logo-icon { color: #fff; width: 24px; height: 24px; }
+    .brand-title { font-size: 1.05rem; font-weight: 700; display: block; color: var(--text-primary); }
+    .brand-subtitle { font-size: 0.75rem; color: var(--accent-cyan); font-weight: 500; }
+
+    .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+    .nav-section-title { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); letter-spacing: 0.08em; padding: 12px 10px 6px; }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      font-weight: 500;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      transition: all 0.15s ease;
+    }
+    .nav-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--text-primary); }
+    .nav-item.active {
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.15), rgba(99, 102, 241, 0.05));
+      color: var(--accent-cyan);
+      border-left: 3px solid var(--accent-cyan);
+    }
+    .badge-count {
+      margin-left: auto;
+      background: var(--accent-rose);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: var(--radius-full);
+    }
+    .sidebar-footer { padding: 16px; border-top: 1px solid var(--border-glass); }
+    .cluster-status-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-glass);
+    }
+    .status-indicator-dot { width: 8px; height: 8px; border-radius: var(--radius-full); }
+    .status-indicator-dot.online { background: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald); }
+    .cluster-name { font-size: 0.8rem; font-weight: 600; }
+    .cluster-ping { font-size: 0.7rem; color: var(--text-muted); }
+
+    /* Top Bar */
+    .main-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow-y: auto;
+      background: radial-gradient(circle at 80% 10%, rgba(56, 189, 248, 0.05), transparent 40%),
+                  radial-gradient(circle at 10% 90%, rgba(99, 102, 241, 0.04), transparent 40%);
+    }
+    .top-navbar {
+      height: 68px;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--border-glass);
+      background: rgba(11, 17, 33, 0.8);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 15;
+    }
+    .search-container { position: relative; width: 440px; display: flex; align-items: center; }
+    .search-icon { position: absolute; left: 12px; width: 17px; height: 17px; color: var(--text-muted); }
+    #globalSearchInput {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-glass);
+      padding: 9px 70px 9px 38px;
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 0.86rem;
+      outline: none;
+    }
+    #globalSearchInput:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+    .shortcut-key {
+      position: absolute;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-secondary);
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+    }
+    .search-results-dropdown {
+      position: absolute;
+      top: 48px;
+      left: 0;
+      right: 0;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-glass);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-subtle);
+      max-height: 320px;
+      overflow-y: auto;
+      display: none;
+      flex-direction: column;
+      z-index: 50;
+    }
+    .search-res-item {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      cursor: pointer;
+      font-size: 0.84rem;
+    }
+    .search-res-item:hover { background: rgba(56, 189, 248, 0.1); }
+
+    .header-actions { display: flex; align-items: center; gap: 14px; }
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-glass);
+      color: var(--text-primary);
+      border-radius: var(--radius-md);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .action-btn:hover { background: rgba(255, 255, 255, 0.1); }
+    .action-btn.ai-toggle-btn {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2));
+      border-color: rgba(56, 189, 248, 0.4);
+      color: #fff;
+    }
+    .action-btn.ai-toggle-btn:hover { box-shadow: var(--shadow-glow-cyan); }
+    .user-profile-badge { display: flex; align-items: center; gap: 10px; padding-left: 10px; border-left: 1px solid var(--border-glass); }
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+    .user-role { font-size: 0.8rem; color: var(--text-secondary); }
+
+    /* Dashboard Layout */
+    .content-view { display: none; padding: 24px 28px; flex-direction: column; gap: 24px; }
+    .content-view.active { display: flex; }
+
+    .card-header {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-glass);
+    }
+    .card-title-wrap { display: flex; align-items: center; gap: 10px; }
+    .card-title-wrap h3 { font-size: 0.96rem; font-weight: 600; }
+    .card-header-icon { width: 20px; height: 20px; }
+
+    .dashboard-grid-top { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+    .quick-insights-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .dashboard-grid-middle { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; }
+    .dashboard-grid-bottom { display: grid; grid-template-columns: 1fr 1.1fr; gap: 20px; }
+
+    /* Health Gauge */
+    .health-summary-card { display: flex; flex-direction: column; }
+    .pulse-badge { font-size: 0.72rem; color: var(--accent-emerald); font-weight: 600; }
+    .health-gauge-container { padding: 22px 20px; display: flex; align-items: center; gap: 20px; }
+    .circle-progress-box { position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; }
+    .progress-ring { transform: rotate(-90deg); }
+    .progress-ring-fill { transition: stroke-dashoffset 0.8s ease, stroke 0.4s ease; stroke-dasharray: 364.4; stroke-dashoffset: 60; }
+    .gauge-center-text { position: absolute; display: flex; flex-direction: column; align-items: center; }
+    .gauge-value { font-size: 2rem; font-weight: 800; line-height: 1; }
+    .gauge-unit { font-size: 0.75rem; color: var(--text-muted); }
+    .health-status-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 4px; }
+    .health-description { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; }
+    .health-counters-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .health-pill { font-size: 0.74rem; font-weight: 600; padding: 3px 8px; border-radius: var(--radius-sm); }
+    .health-pill.healthy { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .health-pill.warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .health-pill.critical { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+    /* Quick Insights */
+    .insight-card { padding: 18px; display: flex; flex-direction: column; justify-content: space-between; }
+    .insight-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .insight-label { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); }
+    .insight-main-val { font-size: 1.45rem; font-weight: 700; font-family: var(--font-mono); }
+    .insight-sub-val { font-size: 0.75rem; color: var(--text-secondary); }
+    .mini-progress-bar { width: 100%; height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: var(--radius-full); overflow: hidden; }
+    .progress-bar-inner { height: 100%; border-radius: var(--radius-full); transition: width 0.4s ease; }
+    .bg-blue { background: var(--accent-blue); }
+    .bg-purple { background: var(--accent-purple); }
+    .bg-amber { background: var(--accent-amber); }
+    .bg-emerald { background: var(--accent-emerald); }
+    .uptime-badge { font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; margin-top: 10px; }
+
+    /* Topology */
+    .map-controls { display: flex; gap: 6px; }
+    .map-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); color: var(--text-secondary); padding: 5px 8px; border-radius: var(--radius-sm); cursor: pointer; }
+    .map-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+    .topology-canvas-container { background: radial-gradient(#1e293b 1px, transparent 1px); background-size: 16px 16px; background-color: rgba(6, 10, 20, 0.8); overflow: hidden; }
+    .topology-node { cursor: pointer; transition: transform 0.2s ease; }
+    .topology-node:hover { filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.6)); }
+    .topology-footer { padding: 10px 18px; font-size: 0.74rem; color: var(--text-muted); border-top: 1px solid var(--border-glass); }
+
+    /* Anomalies */
+    .anomalies-list { padding: 12px; display: flex; flex-direction: column; gap: 10px; max-height: 360px; overflow-y: auto; }
+    .anomaly-item { padding: 12px 14px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 6px; }
+    .anomaly-item.critical { border-left: 3px solid var(--accent-rose); background: rgba(239, 68, 68, 0.05); }
+    .anomaly-item.warning { border-left: 3px solid var(--accent-amber); background: rgba(245, 158, 11, 0.05); }
+    .anomaly-item.info { border-left: 3px solid var(--accent-cyan); }
+    .anomaly-header { display: flex; align-items: center; justify-content: space-between; }
+    .anomaly-title { font-size: 0.85rem; font-weight: 600; }
+    .anomaly-time { font-size: 0.7rem; color: var(--text-muted); }
+    .anomaly-desc { font-size: 0.78rem; color: var(--text-secondary); }
+    .anomaly-action-row { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+    .anomaly-resource-tag { font-size: 0.7rem; font-family: var(--font-mono); background: rgba(255, 255, 255, 0.06); padding: 2px 6px; border-radius: var(--radius-sm); }
+    .ai-diagnose-btn-inline {
+      background: transparent;
+      border: 1px solid var(--accent-cyan);
+      color: var(--accent-cyan);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .ai-diagnose-btn-inline:hover { background: var(--accent-cyan); color: #000; }
+
+    /* Tables & Consoles */
+    .table-responsive { overflow-x: auto; max-height: 280px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: left; }
+    .data-table th { padding: 10px 14px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border-glass); background: rgba(255, 255, 255, 0.02); }
+    .data-table td { padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+
+    .console-box { padding: 12px 16px; background: #050811; font-family: var(--font-mono); font-size: 0.76rem; height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+    .log-entry { display: flex; gap: 10px; line-height: 1.4; }
+    .log-ts { color: var(--text-muted); }
+    .log-lvl.INFO { color: var(--accent-cyan); }
+    .log-lvl.WARN { color: var(--accent-amber); }
+    .log-lvl.CRITICAL { color: var(--accent-rose); font-weight: 700; }
+    .log-src { color: var(--accent-purple); }
+    .log-msg { color: var(--text-secondary); word-break: break-all; }
+
+    /* Slide-out AI Panel */
+    .ai-assistant-panel {
+      width: 420px;
+      background: rgba(10, 15, 29, 0.97);
+      border-left: 1px solid var(--border-glass);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      position: absolute;
+      right: -450px;
+      top: 0;
+      bottom: 0;
+      z-index: 40;
+      box-shadow: -10px 0 30px rgba(0, 0, 0, 0.6);
+      transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .ai-assistant-panel.open { right: 0; }
+    .ai-panel-header { padding: 18px 20px; border-bottom: 1px solid var(--border-glass); display: flex; align-items: center; justify-content: space-between; }
+    .ai-title-wrap { display: flex; align-items: center; gap: 12px; }
+    .sparkle-icon-box { width: 36px; height: 36px; border-radius: var(--radius-md); background: linear-gradient(135deg, #06b6d4, #6366f1); display: flex; align-items: center; justify-content: center; color: #fff; }
+    .ai-name { font-size: 0.95rem; font-weight: 700; }
+    .ai-status { font-size: 0.7rem; color: var(--accent-emerald); display: flex; align-items: center; gap: 5px; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-emerald); }
+    .ai-prompts-slider { padding: 10px 16px; display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--border-glass); white-space: nowrap; }
+    .prompt-chip { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); color: var(--text-secondary); font-size: 0.72rem; padding: 5px 10px; border-radius: var(--radius-full); cursor: pointer; transition: all 0.15s ease; }
+    .prompt-chip:hover { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); border-color: var(--accent-cyan); }
+    .ai-chat-messages { flex: 1; padding: 18px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+    .chat-message { display: flex; gap: 10px; font-size: 0.84rem; }
+    .chat-message.user { flex-direction: row-reverse; }
+    .message-avatar { width: 28px; height: 28px; border-radius: var(--radius-full); background: rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .chat-message.assistant .message-avatar { background: linear-gradient(135deg, #0284c7, #4f46e5); }
+    .message-content { background: rgba(255, 255, 255, 0.04); padding: 12px 14px; border-radius: var(--radius-md); max-width: 82%; line-height: 1.5; border: 1px solid var(--border-glass); }
+    .chat-message.user .message-content { background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); }
+
+    .ai-input-wrapper { padding: 16px 20px; border-top: 1px solid var(--border-glass); }
+    .input-form { display: flex; gap: 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-glass); border-radius: var(--radius-md); padding: 6px 8px; }
+    .input-form textarea { flex: 1; background: transparent; border: none; color: #fff; font-family: var(--font-sans); font-size: 0.84rem; resize: none; outline: none; }
+    .send-btn { background: var(--accent-cyan); border: none; color: #000; width: 36px; height: 36px; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; justify-content: center; align-self: flex-end; }
+    .send-btn:hover { background: #7dd3fc; }
+    .input-footer-note { font-size: 0.68rem; color: var(--text-muted); margin-top: 6px; text-align: center; }
+
+    /* Modals */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 100; }
+    .modal-overlay.open { display: flex; }
+    .modal-card { width: 520px; max-width: 90vw; background: var(--bg-surface); }
+    .modal-header { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-glass); }
+    .modal-body { padding: 20px; font-size: 0.88rem; }
+    .modal-footer { padding: 14px 20px; border-top: 1px solid var(--border-glass); display: flex; justify-content: flex-end; gap: 10px; }
+    .icon-close-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; }
+    .icon-close-btn:hover { color: #fff; }
+
+    /* Color Classes */
+    .text-cyan { color: var(--accent-cyan); }
+    .text-blue { color: var(--accent-blue); }
+    .text-indigo { color: var(--accent-indigo); }
+    .text-purple { color: var(--accent-purple); }
+    .text-emerald { color: var(--accent-emerald); }
+    .text-amber { color: var(--accent-amber); }
+    .text-rose { color: var(--accent-rose); }
+  </style>
+</head>
+<body class="dark-theme">
+
+  <div class="app-layout">
+    
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-box">
+          <i data-lucide="cloud-cog" class="logo-icon"></i>
+        </div>
+        <div class="logo-text">
+          <span class="brand-title">AWS Infra AI</span>
+          <span class="brand-subtitle">CloudOps v2.4</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-title">MONITORING</div>
+        <button class="nav-item active" data-view="dashboard">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" data-view="topology">
+          <i data-lucide="network"></i>
+          <span>Infra Topology</span>
+        </button>
+        <button class="nav-item" data-view="anomalies">
+          <i data-lucide="alert-triangle"></i>
+          <span>Anomalies</span>
+          <span class="badge-count" id="navAnomalyBadge">0</span>
+        </button>
+        <button class="nav-item" data-view="logs">
+          <i data-lucide="terminal"></i>
+          <span>Live Logs</span>
+        </button>
+
+        <div class="nav-section-title">AWS RESOURCES</div>
+        <button class="nav-item" data-view="ec2">
+          <i data-lucide="server"></i>
+          <span>EC2 Instances</span>
+        </button>
+        <button class="nav-item" data-view="vpc">
+          <i data-lucide="git-fork"></i>
+          <span>VPCs & Network</span>
+        </button>
+        <button class="nav-item" data-view="s3">
+          <i data-lucide="database"></i>
+          <span>S3 Storage</span>
+        </button>
+        <button class="nav-item" data-view="iam">
+          <i data-lucide="shield-check"></i>
+          <span>IAM & Security</span>
+        </button>
+        <button class="nav-item" data-view="services">
+          <i data-lucide="cpu"></i>
+          <span>Host Services</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="cluster-status-card">
+          <div class="status-indicator-dot online"></div>
+          <div class="cluster-info">
+            <span class="cluster-name">us-east-1-prod</span>
+            <span class="cluster-ping" id="backendPing">24ms • Live</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="main-wrapper">
+      
+      <!-- TOP HEADER BAR -->
+      <header class="top-navbar">
+        <div class="search-container">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="globalSearchInput" placeholder="Search EC2, VPC, S3, IPs, or logs (Press Ctrl + K)...">
+          <span class="shortcut-key">Ctrl K</span>
+          <div class="search-results-dropdown" id="searchResultsDropdown"></div>
+        </div>
+
+        <div class="header-actions">
+          <button class="action-btn" id="refreshAllBtn" title="Force Refresh Metrics">
+            <i data-lucide="refresh-cw" id="refreshIcon"></i>
+            <span>Refresh</span>
+          </button>
+          
+          <button class="action-btn ai-toggle-btn" id="toggleAiPanelBtn">
+            <i data-lucide="sparkles"></i>
+            <span>AI SRE Assistant</span>
+          </button>
+
+          <div class="user-profile-badge">
+            <div class="avatar">AB</div>
+            <span class="user-role">DevOps Admin</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- VIEW: DASHBOARD OVERVIEW -->
+      <section id="view-dashboard" class="content-view active">
+        
+        <!-- ROW 1: HEALTH GAUGE + QUICK INSIGHTS -->
+        <div class="dashboard-grid-top">
+          
+          <div class="card glass-card health-summary-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <i data-lucide="activity" class="card-header-icon text-cyan"></i>
+                <h3>System Health Score</h3>
+              </div>
+              <span class="pulse-badge" id="healthLiveBadge">● Live Calculating</span>
+            </div>
+
+            <div class="health-gauge-container">
+              <div class="circle-progress-box">
+                <svg class="progress-ring" width="140" height="140">
+                  <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.08)" stroke-width="10" fill="transparent" r="58" cx="70" cy="70"/>
+                  <circle id="healthProgressRing" class="progress-ring-fill" stroke="#10b981" stroke-width="10" stroke-linecap="round" fill="transparent" r="58" cx="70" cy="70"/>
+                </svg>
+                <div class="gauge-center-text">
+                  <span class="gauge-value" id="healthScoreValue">--</span>
+                  <span class="gauge-unit">/100</span>
+                </div>
+              </div>
+
+              <div class="health-meta-details">
+                <div class="health-status-title" id="healthStatusText">Calculating...</div>
+                <p class="health-description">Weighted index across CPU, RAM, disk headroom, and active services.</p>
+                <div class="health-counters-row">
+                  <div class="health-pill healthy"><span id="healthyCount">14</span> Healthy</div>
+                  <div class="health-pill warning"><span id="warningCount">0</span> Warning</div>
+                  <div class="health-pill critical"><span id="criticalCount">0</span> Critical</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="quick-insights-container">
+            <div class="card glass-card insight-card">
+              <div class="insight-header">
+                <span class="insight-label">CPU UTILIZATION</span>
+                <i data-lucide="cpu" class="insight-icon text-blue"></i>
+              </div>
+              <div class="insight-value-row">
+                <span class="insight-main-val" id="cpuUsage">0.0%</span>
+                <span class="insight-sub-val" id="cpuCores">8 Cores</span>
+              </div>
+              <div class="mini-progress-bar">
+                <div class="progress-bar-inner bg-blue" id="cpuProgressBar" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <div class="card glass-card insight-card">
+              <div class="insight-header">
+                <span class="insight-label">MEMORY USAGE</span>
+                <i data-lucide="hard-drive" class="insight-icon text-purple"></i>
+              </div>
+              <div class="insight-value-row">
+                <span class="insight-main-val" id="memoryUsage">0.0%</span>
+                <span class="insight-sub-val" id="memoryDetails">0/0 GB</span>
+              </div>
+              <div class="mini-progress-bar">
+                <div class="progress-bar-inner bg-purple" id="memProgressBar" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <div class="card glass-card insight-card">
+              <div class="insight-header">
+                <span class="insight-label">ROOT DISK USAGE</span>
+                <i data-lucide="disc" class="insight-icon text-amber"></i>
+              </div>
+              <div class="insight-value-row">
+                <span class="insight-main-val" id="diskUsage">0.0%</span>
+                <span class="insight-sub-val" id="diskDetails">0/0 GB</span>
+              </div>
+              <div class="mini-progress-bar">
+                <div class="progress-bar-inner bg-amber" id="diskProgressBar" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <div class="card glass-card insight-card">
+              <div class="insight-header">
+                <span class="insight-label">NETWORK I/O</span>
+                <i data-lucide="arrow-down-up" class="insight-icon text-emerald"></i>
+              </div>
+              <div class="insight-value-row">
+                <span class="insight-main-val" id="networkRate">0 KB/s</span>
+                <span class="insight-sub-val" id="networkTotals">↓ 0 MB | ↑ 0 MB</span>
+              </div>
+              <div class="uptime-badge">
+                <i data-lucide="clock"></i> Uptime: <strong id="systemUptime">--</strong>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ROW 2: TOPOLOGY & ANOMALIES -->
+        <div class="dashboard-grid-middle">
+          
+          <div class="card glass-card map-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <i data-lucide="network" class="card-header-icon text-indigo"></i>
+                <h3>Interactive Infrastructure Topology</h3>
+              </div>
+              <div class="map-controls">
+                <button class="map-btn" id="mapZoomIn" title="Zoom In"><i data-lucide="zoom-in"></i></button>
+                <button class="map-btn" id="mapZoomOut" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
+                <button class="map-btn" id="mapReset" title="Reset View"><i data-lucide="rotate-ccw"></i></button>
+              </div>
+            </div>
+            
+            <div class="topology-canvas-container" id="topologyCanvasContainer">
+              <svg id="topologySvg" class="topology-svg" width="100%" height="320"></svg>
+            </div>
+            <div class="topology-footer">
+              <span>Click any node to inspect telemetry and trigger AI diagnosis.</span>
+            </div>
+          </div>
+
+          <div class="card glass-card anomalies-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <i data-lucide="shield-alert" class="card-header-icon text-rose"></i>
+                <h3>Active Anomaly Feed</h3>
+              </div>
+              <span class="badge-status-pill" id="anomalyCountPill">0 Detected</span>
+            </div>
+
+            <div class="anomalies-list" id="anomaliesList">
+              <div class="empty-state">
+                <i data-lucide="check-circle" class="empty-icon text-emerald"></i>
+                <p>All monitored thresholds are within standard parameters.</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ROW 3: PROCESS MONITOR & LIVE LOG STREAM -->
+        <div class="dashboard-grid-bottom">
+          
+          <div class="card glass-card processes-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <i data-lucide="cpu" class="card-header-icon text-blue"></i>
+                <h3>Top Resource Consuming Processes</h3>
+              </div>
+              <span class="sub-header-text" id="totalProcCount">0 processes active</span>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>PID</th>
+                    <th>Process Name</th>
+                    <th>CPU %</th>
+                    <th>Memory %</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="topProcessTableBody">
+                  <tr><td colspan="5" class="text-center">Loading processes...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card glass-card logs-console-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <i data-lucide="terminal" class="card-header-icon text-emerald"></i>
+                <h3>Telemetry Log Stream</h3>
+              </div>
+              <div class="log-actions">
+                <select id="logLevelFilter" class="log-filter-select">
+                  <option value="ALL">All Levels</option>
+                  <option value="INFO">INFO</option>
+                  <option value="WARN">WARN</option>
+                  <option value="CRITICAL">CRITICAL</option>
+                </select>
+                <button class="icon-action-btn" id="clearLogsBtn" title="Clear Console"><i data-lucide="trash-2"></i></button>
+              </div>
+            </div>
+
+            <div class="console-box" id="dashboardLogBox"></div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- VIEW: DETAILED RESOURCE VIEWS -->
+      <section id="view-resources" class="content-view">
+        <div class="view-header">
+          <div>
+            <h2 id="resourceViewTitle">AWS Resources</h2>
+            <p id="resourceViewSubtitle">Inspect cloud infrastructure instances and configurations</p>
+          </div>
+          <button class="action-btn" id="backToDashBtn">
+            <i data-lucide="arrow-left"></i>
+            <span>Back to Overview</span>
+          </button>
+        </div>
+
+        <div class="card glass-card resource-table-card">
+          <div class="resource-filter-bar">
+            <input type="text" id="resourceFilterInput" class="filter-search-input" placeholder="Filter by Name, ID, or Region...">
+            <div class="filter-stats" id="resourceCountDisplay">Showing 0 items</div>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table" id="genericResourceTable">
+              <thead id="resourceTableHeader"></thead>
+              <tbody id="resourceTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- RIGHT SLIDE-OUT AI ASSISTANT PANEL -->
+    <aside class="ai-assistant-panel" id="aiAssistantPanel">
+      <div class="ai-panel-header">
+        <div class="ai-title-wrap">
+          <div class="sparkle-icon-box">
+            <i data-lucide="bot"></i>
+          </div>
+          <div>
+            <h3 class="ai-name">CloudOps AI SRE</h3>
+            <span class="ai-status"><span class="status-dot"></span> Live Telemetry Context Enabled</span>
+          </div>
+        </div>
+        <button class="icon-close-btn" id="closeAiPanelBtn"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="ai-prompts-slider">
+        <button class="prompt-chip" data-prompt="Analyze my current CPU, Memory, and Disk usage and provide optimization steps.">
+          📊 Analyze System Load
+        </button>
+        <button class="prompt-chip" data-prompt="Diagnose active anomalies and give me mitigation shell commands.">
+          ⚠️ Diagnose Anomalies
+        </button>
+        <button class="prompt-chip" data-prompt="Generate an AWS CLI script to check EC2 health checks and restart stopped instances.">
+          🤖 EC2 Recovery Script
+        </button>
+        <button class="prompt-chip" data-prompt="What are the best practices to secure S3 buckets and IAM roles?">
+          🔒 S3/IAM Security Audit
+        </button>
+      </div>
+
+      <div class="ai-chat-messages" id="aiChatMessages">
+        <div class="chat-message assistant">
+          <div class="message-avatar"><i data-lucide="bot"></i></div>
+          <div class="message-content">
+            Hello! I am your <strong>AWS Infrastructure AI Assistant</strong>. I am linked directly to your live system metrics, anomaly engine, and topology map.
+            <br><br>
+            Ask me to troubleshoot high resource usage, generate CloudFormation/Terraform scripts, or resolve server anomalies.
+          </div>
+        </div>
+      </div>
+
+      <div class="ai-input-wrapper">
+        <div class="input-form">
+          <textarea id="aiChatInput" rows="2" placeholder="Ask AI to troubleshoot infrastructure, analyze logs, or write scripts..."></textarea>
+          <button id="sendAiChatBtn" class="send-btn" title="Send (Enter)">
+            <i data-lucide="send"></i>
+          </button>
+        </div>
+        <div class="input-footer-note">Press <strong>Enter</strong> to send • Context auto-injected from psutil</div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- MODAL: NODE DETAIL INSPECTOR -->
+  <div class="modal-overlay" id="nodeModal">
+    <div class="modal-card glass-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <i data-lucide="layers" class="text-blue"></i>
+          <h3 id="modalNodeTitle">Resource Inspection</h3>
+        </div>
+        <button class="icon-close-btn" id="closeNodeModalBtn"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" id="modalNodeContent"></div>
+      <div class="modal-footer">
+        <button class="action-btn" id="modalCloseBtn">Close</button>
+        <button class="action-btn ai-action-btn" id="modalAiDiagnoseBtn">
+          <i data-lucide="sparkles"></i>
+          <span>Diagnose with AI</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
