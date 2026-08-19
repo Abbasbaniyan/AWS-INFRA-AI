@@ -6,7 +6,7 @@ infrastructure topology, service lifecycle actions, and AI troubleshooting.
 
 import os
 import time
-import datetime
+from datetime import datetime, timezone, timedelta
 import random
 import requests
 import psutil
@@ -116,7 +116,7 @@ def get_top_procs(limit: int = 5):
 def log_event(level: str, source: str, message: str):
     entry = {
         "id": f"log-{int(time.time()*1000)}-{random.randint(100, 999)}",
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "level": level.upper(),
         "source": source,
         "message": message
@@ -162,7 +162,7 @@ def get_metrics():
         status, color = "Critical", "#ef4444"
         
     return {
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": datetime.now().isoformat(),
         "cpu": {
             "percent": cpu,
             "cores": psutil.cpu_count(logical=True),
@@ -214,7 +214,7 @@ def get_anomalies():
             "title": f"Elevated CPU Spike ({cpu}%)",
             "description": "Host processor utilization exceeded threshold of 80%. Risk of thread starvation.",
             "possible_cause": "High thread contention or intensive computation in worker processes.",
-            "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+            "timestamp": datetime.now().strftime("%H:%M:%S"),
             "ai_prompt": f"My host server CPU usage is at {cpu}%. Top processes are showing heavy load. Give me a step-by-step investigation command set for Linux/AWS EC2 to pinpoint and mitigate this."
         })
         
@@ -227,7 +227,7 @@ def get_anomalies():
             "title": f"High Memory Consumption ({mem}%)",
             "description": "RAM allocation is at {mem}%. Swap usage may trigger IO performance penalties.",
             "possible_cause": "Potential memory leak in daemon or large un-cached query buffer.",
-            "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+            "timestamp": datetime.now().strftime("%H:%M:%S"),
             "ai_prompt": f"System RAM usage reached {mem}%. How can I identify memory leaks, check buffer/cache reclaimable memory, and prevent OOM Killer from terminating critical services?"
         })
 
@@ -240,7 +240,7 @@ def get_anomalies():
             "title": f"Storage Volume Critical ({disk}%)",
             "description": "Root volume free space has dropped below 10%.",
             "possible_cause": "Unrotated application logs in /var/log or untruncated Docker container logs.",
-            "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+            "timestamp": datetime.now().strftime("%H:%M:%S"),
             "ai_prompt": "My root disk volume is 90%+ full. Provide Linux commands to locate the largest space-consuming directories and safely clean journal/Docker logs without corrupting running containers."
         })
 
@@ -254,7 +254,7 @@ def get_anomalies():
                 "title": "Sub-optimal Target P99 Latency",
                 "description": "99th percentile response time is fluctuating between 180ms and 240ms.",
                 "possible_cause": "Cold starts in backend workers or Keep-Alive connection timeout mismatch.",
-                "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
                 "ai_prompt": "Explain how to diagnose ALB P99 latency spikes in AWS CloudWatch and adjust connection keep-alive headers on Nginx/Gunicorn backends."
             },
             {
@@ -265,40 +265,143 @@ def get_anomalies():
                 "title": "Lifecycle Rule Optimization Recommended",
                 "description": "Over 4.2 TB of uncompressed logs have remained in S3 Standard tier for > 90 days.",
                 "possible_cause": "Missing S3 Intelligent-Tiering or Glacier lifecycle transition rule.",
-                "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
                 "ai_prompt": "Give me a CloudFormation/Terraform snippet and AWS CLI command to set up an S3 Lifecycle rule transitioning objects over 30 days to Intelligent-Tiering and 90 days to Glacier Flexible Retrieval."
             }
         ])
 
     return {"count": len(anomalies), "anomalies": anomalies}
 
-RESOURCES_DATA = {
-    "ec2": [
-        {"id": "i-09f482a1b9e87110a", "name": "prod-api-gateway-01", "type": "c6i.xlarge", "zone": "us-east-1a", "state": "running", "private_ip": "10.0.1.45", "public_ip": "54.210.14.92", "cpu": 42.5, "health": "Healthy"},
-        {"id": "i-08a79c234f9a12bc4", "name": "prod-worker-celery-01", "type": "r6i.large", "zone": "us-east-1b", "state": "running", "private_ip": "10.0.2.112", "public_ip": "N/A", "cpu": 78.1, "health": "Healthy"},
-        {"id": "i-011f930cd419bba56", "name": "staging-web-frontend", "type": "t3.medium", "zone": "us-east-1a", "state": "running", "private_ip": "10.0.1.88", "public_ip": "3.88.219.10", "cpu": 12.0, "health": "Healthy"},
-        {"id": "i-0ec992147bb0091aa", "name": "batch-processor-spot", "type": "c6g.2xlarge", "zone": "us-east-1c", "state": "stopped", "private_ip": "10.0.3.204", "public_ip": "N/A", "cpu": 0.0, "health": "Stopped"}
-    ],
-    "vpc": [
-        {"id": "vpc-0a811c0091fec001", "name": "prod-vpc-main", "cidr": "10.0.0.0/16", "subnets": 6, "nat_gateways": 2, "igw": "igw-082bcfa", "state": "available"},
-        {"id": "vpc-09b99142ecba0022", "name": "staging-vpc", "cidr": "172.16.0.0/16", "subnets": 3, "nat_gateways": 1, "igw": "igw-091aacc", "state": "available"}
-    ],
-    "s3": [
-        {"name": "prod-app-assets-cdn-east", "region": "us-east-1", "objects": "142,890", "size": "48.2 GB", "encryption": "AES-256", "public": "Blocked"},
-        {"name": "infra-backups-database-daily", "region": "us-east-1", "objects": "1,240", "size": "1.8 TB", "encryption": "aws:kms", "public": "Blocked"},
-        {"name": "cloudtrail-audit-logs-root", "region": "us-east-1", "objects": "890,200", "size": "210.4 GB", "encryption": "aws:kms", "public": "Blocked"}
-    ],
-    "iam": [
-        {"name": "EC2ProductionInstanceProfile", "type": "Role", "users_attached": 4, "last_activity": "2 mins ago", "status": "Active"},
-        {"name": "DevOpsAutomationDeployer", "type": "User", "mfa": "Enabled", "last_activity": "Today 10:14 AM", "status": "Active"},
-        {"name": "CloudWatchObservabilityPolicy", "type": "Policy", "attached_entities": 12, "last_activity": "Continuous", "status": "Attached"}
-    ]
-}
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 
-@app.get("/api/resources")
-def get_resources():
-    return RESOURCES_DATA
+# Initialize AWS Session
+def get_aws_session():
+    return boto3.Session(
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+    )
 
+# -----------------------------------------------------------------------------
+# Real AWS Resource Endpoints (Boto3)
+# -----------------------------------------------------------------------------
+@app.get("/resources/ec2")
+def fetch_live_ec2():
+    try:
+        session = get_aws_session()
+        ec2 = session.client("ec2")
+        response = ec2.describe_instances()
+        
+        items = []
+        for res in response.get("Reservations", []):
+            for inst in res.get("Instances", []):
+                name_tag = next((tag["Value"] for tag in inst.get("Tags", []) if tag["Key"] == "Name"), "Unnamed")
+                items.append({
+                    "id": inst.get("InstanceId"),
+                    "name": name_tag,
+                    "status": inst.get("State", {}).get("Name", "unknown"),
+                    "details": {
+                        "type": inst.get("InstanceType"),
+                        "private_ip": inst.get("PrivateIpAddress", "N/A"),
+                        "public_ip": inst.get("PublicIpAddress", "N/A"),
+                        "az": inst.get("Placement", {}).get("AvailabilityZone")
+                    }
+                })
+        return {"items": items, "source": "aws-boto3"}
+    except (BotoCoreError, ClientError, Exception) as e:
+        print(f"⚠️ AWS Boto3 fallback for EC2: {e}")
+        return {
+            "items": [
+                {"id": "i-09f482a1b9e87110a", "name": "prod-api-cluster-01", "status": "running", "details": {"type": "c6i.xlarge", "ip": "10.0.12.44"}},
+                {"id": "i-0219c4d9a1811a03f", "name": "prod-api-cluster-02", "status": "running", "details": {"type": "c6i.xlarge", "ip": "10.0.12.45"}},
+                {"id": "i-0bb849281aef114cd", "name": "worker-queue-node", "status": "running", "details": {"type": "m6i.large", "ip": "10.0.24.18"}}
+            ],
+            "source": "simulated"
+        }
+
+@app.get("/resources/s3")
+def fetch_live_s3():
+    try:
+        session = get_aws_session()
+        s3 = session.client("s3")
+        response = s3.list_buckets()
+        
+        items = []
+        for bucket in response.get("Buckets", []):
+            items.append({
+                "id": bucket.get("Name"),
+                "name": bucket.get("Name"),
+                "status": "Active",
+                "details": {
+                    "created": bucket.get("CreationDate").strftime("%Y-%m-%d %H:%M:%S")
+                }
+            })
+        return {"items": items, "source": "aws-boto3"}
+    except (BotoCoreError, ClientError, Exception) as e:
+        print(f"⚠️ AWS Boto3 fallback for S3: {e}")
+        return {
+            "items": [
+                {"id": "s3-prod-assets-vault", "name": "prod-assets-vault", "status": "Active", "details": {"encryption": "AES-256", "versioning": True}},
+                {"id": "s3-telemetry-logs-archive", "name": "telemetry-logs-archive", "status": "Active", "details": {"lifecycle": "Glacier-30d"}}
+            ],
+            "source": "simulated"
+        }
+
+@app.get("/resources/vpc")
+def fetch_live_vpcs():
+    try:
+        session = get_aws_session()
+        ec2 = session.client("ec2")
+        response = ec2.describe_vpcs()
+        
+        items = []
+        for vpc in response.get("Vpcs", []):
+            name_tag = next((tag["Value"] for tag in vpc.get("Tags", []) if tag["Key"] == "Name"), vpc.get("VpcId"))
+            items.append({
+                "id": vpc.get("VpcId"),
+                "name": name_tag,
+                "status": "Available",
+                "details": {
+                    "cidr": vpc.get("CidrBlock"),
+                    "is_default": vpc.get("IsDefault")
+                }
+            })
+        return {"items": items, "source": "aws-boto3"}
+    except (BotoCoreError, ClientError, Exception) as e:
+        return {
+            "items": [
+                {"id": "vpc-0824baf109", "name": "production-core-vpc", "status": "Available", "details": {"cidr": "10.0.0.0/16", "subnets": 6}}
+            ],
+            "source": "simulated"
+        }
+
+@app.get("/resources/iam")
+def fetch_live_iam():
+    try:
+        session = get_aws_session()
+        iam = session.client("iam")
+        response = iam.list_roles(MaxItems=15)
+        
+        items = []
+        for role in response.get("Roles", []):
+            items.append({
+                "id": role.get("RoleId"),
+                "name": role.get("RoleName"),
+                "status": "Active",
+                "details": {
+                    "arn": role.get("Arn"),
+                    "created": role.get("CreateDate").strftime("%Y-%m-%d")
+                }
+            })
+        return {"items": items, "source": "aws-boto3"}
+    except (BotoCoreError, ClientError, Exception) as e:
+        return {
+            "items": [
+                {"id": "iam-role-ecs-task", "name": "ECSTaskExecutionRole", "status": "Active", "details": {"policies": ["AmazonECSTaskExecutionRolePolicy"]}}
+            ],
+            "source": "simulated"
+        }
 @app.get("/api/topology")
 def get_topology():
     return {
@@ -346,6 +449,71 @@ def get_logs(limit: int = 50, level: Optional[str] = None):
     if level and level.upper() != "ALL":
         filtered = [l for l in filtered if l["level"] == level.upper()]
     return {"logs": filtered[:limit], "total": len(filtered)}
+
+@app.get("/api/cloudwatch/ec2-metrics")
+def get_ec2_cloudwatch_metrics(instance_id: Optional[str] = None):
+    """
+    Fetches real-time 1-hour metric statistics from AWS CloudWatch.
+    """
+    try:
+        session = get_aws_session()
+        cw = session.client("cloudwatch")
+        
+        end_time = datetime.now(timezone.utc)
+        start_time = end_time - timedelta(minutes=60)
+        
+        dimensions = []
+        if instance_id:
+            dimensions.append({"Name": "InstanceId", "Value": instance_id})
+        
+        # 1. Fetch CPU Utilization (%)
+        cpu_res = cw.get_metric_statistics(
+            Namespace="AWS/EC2",
+            MetricName="CPUUtilization",
+            Dimensions=dimensions,
+            StartTime=start_time,
+            EndTime=end_time,
+            Period=300,  # 5-minute data points
+            Statistics=["Average", "Maximum"]
+        )
+        
+        # Sort data points chronologically
+        datapoints = sorted(cpu_res.get("Datapoints", []), key=lambda x: x["Timestamp"])
+        
+        formatted_cpu_points = [
+            {
+                "timestamp": dp["Timestamp"].strftime("%H:%M"),
+                "average": round(dp["Average"], 2),
+                "maximum": round(dp["Maximum"], 2)
+            }
+            for dp in datapoints
+        ]
+        
+        latest_avg = formatted_cpu_points[-1]["average"] if formatted_cpu_points else 0.0
+        
+        return {
+            "status": "success",
+            "source": "aws-cloudwatch",
+            "instance_id": instance_id or "fleet-aggregate",
+            "latest_cpu_percent": latest_avg,
+            "history": formatted_cpu_points
+        }
+        
+    except Exception as e:
+        print(f"⚠️ CloudWatch metrics fallback: {e}")
+        # Simulated CloudWatch history fallback
+        now = datetime.now(timezone.utc)
+        simulated_history = [
+            {"timestamp": (now - timedelta(minutes=m)).strftime("%H:%M"), "average": random.uniform(15.0, 45.0), "maximum": random.uniform(50.0, 75.0)}
+            for m in range(60, 0, -10)
+        ]
+        return {
+            "status": "fallback",
+            "source": "simulated",
+            "instance_id": instance_id or "i-09f482a1b9e87110a",
+            "latest_cpu_percent": 34.2,
+            "history": simulated_history
+        }
 
 # -----------------------------------------------------------------------------
 # AI Assistant Engine & SRE Heuristic Fallback

@@ -593,36 +593,60 @@
             </div>
 
             <div class="card glass-card insight-card">
-              <div class="insight-header">
+            <div class="insight-header">
                 <span class="insight-label">ROOT DISK USAGE</span>
                 <i data-lucide="disc" class="insight-icon text-amber"></i>
-              </div>
-              <div class="insight-value-row">
+            </div>
+            <div class="insight-value-row">
                 <span class="insight-main-val" id="diskUsage">0.0%</span>
                 <span class="insight-sub-val" id="diskDetails">0/0 GB</span>
-              </div>
-              <div class="mini-progress-bar">
+            </div>
+            <div class="mini-progress-bar">
                 <div class="progress-bar-inner bg-amber" id="diskProgressBar" style="width: 0%"></div>
-              </div>
+            </div>
             </div>
 
             <div class="card glass-card insight-card">
-              <div class="insight-header">
+            <div class="insight-header">
                 <span class="insight-label">NETWORK I/O</span>
                 <i data-lucide="arrow-down-up" class="insight-icon text-emerald"></i>
-              </div>
-              <div class="insight-value-row">
+            </div>
+            <div class="insight-value-row">
                 <span class="insight-main-val" id="networkRate">0 KB/s</span>
                 <span class="insight-sub-val" id="networkTotals">↓ 0 MB | ↑ 0 MB</span>
-              </div>
-              <div class="uptime-badge">
-                <i data-lucide="clock"></i> Uptime: <strong id="systemUptime">--</strong>
-              </div>
             </div>
-          </div>
+            <div class="uptime-badge">
+                <i data-lucide="clock"></i> Uptime: <strong id="systemUptime">--</strong>
+            </div>
+            </div>
 
+            <!-- AWS CLOUDWATCH FLEET METRIC CARD -->
+            <div class="card glass-card insight-card">
+            <div class="insight-header">
+                <span class="insight-label">CLOUDWATCH FLEET CPU</span>
+                <i data-lucide="activity" class="insight-icon text-cyan"></i>
+            </div>
+            <div class="insight-value-row">
+                <span class="insight-main-val" id="cwLatestCpu">--%</span>
+                <span class="insight-sub-val" id="cwSourceBadge">AWS Live (1h)</span>
+            </div>
+            <canvas id="cwMetricChart" width="260" height="40" style="width: 100%; height: 40px; margin-top: 4px;"></canvas>
+            </div>
         </div>
 
+        </div>
+        <!-- AWS CLOUDWATCH FLEET METRIC CARD -->
+        <div class="card glass-card insight-card">
+        <div class="insight-header">
+            <span class="insight-label">CLOUDWATCH FLEET CPU</span>
+            <i data-lucide="activity" class="insight-icon text-cyan"></i>
+        </div>
+        <div class="insight-value-row">
+            <span class="insight-main-val" id="cwLatestCpu">--%</span>
+            <span class="insight-sub-val" id="cwSourceBadge">AWS Live (1h)</span>
+        </div>
+        <canvas id="cwMetricChart" width="260" height="40" style="width: 100%; height: 40px; margin-top: 4px;"></canvas>
+        </div>
         <!-- ROW 2: TOPOLOGY & ANOMALIES -->
         <div class="dashboard-grid-middle">
           

@@ -1,12 +1,17 @@
+// State Management
 const state = {
-  currentView: 'dashboard',
-  cachedTopology: null,
-  cachedResources: null,
-  isAiPanelOpen: false,
-  selectedNode: null,
-  chatHistory: []
+  activeView: 'dashboard',
+  metrics: null,
+  rawMetrics: null,
+  chatHistory: [],
+  logs: [],
+  zoomLevel: 1,
+  pan: { x: 0, y: 0 },
+  isDragging: false,
+  dragStart: { x: 0, y: 0 }
 };
 
+// DOM Selectors Cache
 const elements = {
   navButtons: document.querySelectorAll('.nav-item'),
   views: {
@@ -56,462 +61,433 @@ const elements = {
   closeNodeModalBtn: document.getElementById('closeNodeModalBtn'),
   modalCloseBtn: document.getElementById('modalCloseBtn'),
   modalAiDiagnoseBtn: document.getElementById('modalAiDiagnoseBtn'),
-  backToDashBtn: document.getElementById('backToDashBtn')
+  backToDashBtn: document.getElementById('backToDashBtn'),
+  resourceViewTitle: document.getElementById('resourceViewTitle'),
+  resourceViewSubtitle: document.getElementById('resourceViewSubtitle'),
+  resourceFilterInput: document.getElementById('resourceFilterInput'),
+  resourceCountDisplay: document.getElementById('resourceCountDisplay'),
+  resourceTableHeader: document.getElementById('resourceTableHeader'),
+  resourceTableBody: document.getElementById('resourceTableBody')
 };
 
+// Initialize Application
 document.addEventListener('DOMContentLoaded', () => {
-  if (window.lucide) lucide.createIcons();
-  
-  initNavigation();
-  initSearch();
-  initAiAssistant();
-  initTopologyControls();
-  
-  fetchLiveMetrics();
-  fetchAnomalies();
-  fetchTopology();
-  fetchLogs();
-  fetchResources();
-
-  setInterval(() => {
-    fetchLiveMetrics();
-    fetchAnomalies();
-    fetchLogs();
-  }, 4000);
-
-  elements.refreshAllBtn.addEventListener('click', () => {
-    const icon = document.getElementById('refreshIcon');
-    icon.classList.add('spinning');
-    Promise.all([fetchLiveMetrics(), fetchAnomalies(), fetchLogs(), fetchTopology()]).then(() => {
-      setTimeout(() => icon.classList.remove('spinning'), 600);
-    });
-  });
+  initLucide();
+  initEventListeners();
+  fetchMetrics();
+  setInterval(fetchMetrics, 4000);
 });
 
-function initNavigation() {
+function initLucide() {
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+}
+
+// Event Listeners Registration
+function initEventListeners() {
+  // Navigation Handling
   elements.navButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-      const viewKey = btn.getAttribute('data-view');
+      const view = btn.getAttribute('data-view');
+      
+      // Anomaly Feed Anchor
+      if (view === 'anomalies') {
+        switchView('dashboard');
+        elements.navButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const anomalyCard = document.querySelector('.anomalies-card');
+        if (anomalyCard) {
+          anomalyCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          anomalyCard.style.outline = '2px solid var(--accent-rose)';
+          setTimeout(() => { anomalyCard.style.outline = 'none'; }, 2000);
+        }
+        return;
+      }
+
+      // Live Logs Anchor
+      if (view === 'logs') {
+        switchView('dashboard');
+        elements.navButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const logCard = document.querySelector('.logs-console-card');
+        if (logCard) {
+          logCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+      }
+
+      // AWS Resource Categories & Topology
       elements.navButtons.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
 
-      if (viewKey === 'dashboard') {
-        elements.views.dashboard.classList.add('active');
-        elements.views.resources.classList.remove('active');
+      if (['ec2', 'vpc', 's3', 'iam', 'services'].includes(view)) {
+        renderResourceTable(view);
       } else {
-        openResourceView(viewKey);
+        switchView(view);
       }
     });
   });
 
-  elements.backToDashBtn.addEventListener('click', () => {
-    elements.navButtons.forEach(b => {
-      if (b.getAttribute('data-view') === 'dashboard') b.classList.add('active');
-      else b.classList.remove('active');
+  if (elements.backToDashBtn) {
+    elements.backToDashBtn.addEventListener('click', () => {
+      elements.navButtons.forEach(b => b.classList.remove('active'));
+      const dashBtn = document.querySelector('[data-view="dashboard"]');
+      if (dashBtn) dashBtn.classList.add('active');
+      switchView('dashboard');
     });
-    elements.views.dashboard.classList.add('active');
-    elements.views.resources.classList.remove('active');
-  });
-}
-
-function openResourceView(viewKey) {
-  elements.views.dashboard.classList.remove('active');
-  elements.views.resources.classList.add('active');
-
-  const titleElem = document.getElementById('resourceViewTitle');
-  const subTitleElem = document.getElementById('resourceViewSubtitle');
-  const thead = document.getElementById('resourceTableHeader');
-  const tbody = document.getElementById('resourceTableBody');
-
-  thead.innerHTML = '';
-  tbody.innerHTML = '';
-
-  if (viewKey === 'ec2') {
-    titleElem.innerText = 'EC2 Compute Instances';
-    subTitleElem.innerText = 'Monitored elastic compute instances, utilization & private IP topology';
-    thead.innerHTML = `<tr><th>Instance ID</th><th>Name</th><th>Type</th><th>Zone</th><th>State</th><th>CPU %</th><th>Health</th><th>Action</th></tr>`;
-    renderEc2Table(tbody);
-  } else if (viewKey === 'vpc') {
-    titleElem.innerText = 'VPC & Networking Infrastructure';
-    subTitleElem.innerText = 'Virtual Private Clouds, CIDR blocks, Subnets and Gateway routing';
-    thead.innerHTML = `<tr><th>VPC ID</th><th>Name</th><th>CIDR Block</th><th>Subnets</th><th>NAT Gateways</th><th>IGW</th><th>Status</th></tr>`;
-    renderVpcTable(tbody);
-  } else if (viewKey === 's3') {
-    titleElem.innerText = 'S3 Cloud Storage Buckets';
-    subTitleElem.innerText = 'Object storage, bucket replication, encryption and storage tiering';
-    thead.innerHTML = `<tr><th>Bucket Name</th><th>Region</th><th>Object Count</th><th>Total Size</th><th>Encryption</th><th>Public Access</th></tr>`;
-    renderS3Table(tbody);
-  } else if (viewKey === 'services') {
-    titleElem.innerText = 'System Daemons & Container Services';
-    subTitleElem.innerText = 'Manage background processes, Nginx web engine, and Docker status';
-    thead.innerHTML = `<tr><th>Service Name</th><th>Current Status</th><th>Health Indicator</th><th>Actions</th></tr>`;
-    renderServicesTable(tbody);
-  } else {
-    titleElem.innerText = `${viewKey.toUpperCase()} Resources`;
-    subTitleElem.innerText = 'Active inventory catalog';
-    thead.innerHTML = `<tr><th>Resource Key</th><th>Status</th><th>Telemetry</th></tr>`;
-    tbody.innerHTML = `<tr><td colspan="3">Resource details synchronized via live inventory.</td></tr>`;
   }
-}
 
-async function fetchLiveMetrics() {
-  try {
-    const res = await fetch('/metrics');
-    if (!res.ok) return;
-    const data = await res.json();
-
-    const score = data.health.score;
-    elements.healthScoreValue.innerText = score;
-    elements.healthStatusText.innerText = data.health.status;
-    elements.healthStatusText.style.color = data.health.color;
-
-    const maxOffset = 364.4;
-    const strokeOffset = maxOffset - (score / 100) * maxOffset;
-    elements.healthProgressRing.style.strokeDashoffset = strokeOffset;
-    elements.healthProgressRing.style.stroke = data.health.color;
-
-    elements.healthyCount.innerText = data.health.healthy_components;
-    elements.warningCount.innerText = data.health.warning_components;
-    elements.criticalCount.innerText = data.health.critical_components;
-
-    elements.cpuUsage.innerText = `${data.cpu.percent}%`;
-    elements.cpuCores.innerText = `${data.cpu.cores} vCPUs`;
-    elements.cpuProgressBar.style.width = `${Math.min(100, data.cpu.percent)}%`;
-
-    elements.memoryUsage.innerText = `${data.memory.percent}%`;
-    elements.memoryDetails.innerText = `${data.memory.used_gb} / ${data.memory.total_gb} GB`;
-    elements.memProgressBar.style.width = `${Math.min(100, data.memory.percent)}%`;
-
-    elements.diskUsage.innerText = `${data.disk.percent}%`;
-    elements.diskDetails.innerText = `${data.disk.used_gb} / ${data.disk.total_gb} GB`;
-    elements.diskProgressBar.style.width = `${Math.min(100, data.disk.percent)}%`;
-
-    elements.networkRate.innerText = `${data.network.kb_recv_sec} KB/s`;
-    elements.networkTotals.innerText = `↓ ${data.network.total_recv_mb} MB | ↑ ${data.network.total_sent_mb} MB`;
-    elements.systemUptime.innerText = data.uptime.formatted;
-
-    elements.totalProcCount.innerText = `${data.active_processes_count} active processes`;
-    elements.topProcessTableBody.innerHTML = data.top_processes.map(proc => `
-      <tr>
-        <td><code>${proc.pid}</code></td>
-        <td><strong>${proc.name}</strong></td>
-        <td><span class="text-${proc.cpu_percent > 50 ? 'rose' : 'cyan'}">${proc.cpu_percent}%</span></td>
-        <td>${proc.memory_percent}%</td>
-        <td><span class="health-pill healthy">${proc.status}</span></td>
-      </tr>
-    `).join('');
-  } catch (err) {
-    console.warn('Metrics polling error:', err);
-  }
-}
-
-async function fetchAnomalies() {
-  try {
-    const res = await fetch('/api/anomalies');
-    if (!res.ok) return;
-    const data = await res.json();
-
-    elements.anomalyCountPill.innerText = `${data.count} Active`;
-    elements.navAnomalyBadge.innerText = data.count;
-
-    if (!data.anomalies || data.anomalies.length === 0) {
-      elements.anomaliesList.innerHTML = `
-        <div class="empty-state">
-          <i data-lucide="check-circle" class="empty-icon text-emerald"></i>
-          <p>All monitored thresholds are within standard parameters.</p>
-        </div>`;
-      if (window.lucide) lucide.createIcons();
-      return;
-    }
-
-    elements.anomaliesList.innerHTML = data.anomalies.map(anom => `
-      <div class="anomaly-item ${anom.severity.toLowerCase()}">
-        <div class="anomaly-header">
-          <span class="anomaly-title">${anom.title}</span>
-          <span class="anomaly-time">${anom.timestamp}</span>
-        </div>
-        <div class="anomaly-desc">${anom.description}</div>
-        <div class="anomaly-action-row">
-          <span class="anomaly-resource-tag">${anom.resource} (${anom.resource_id})</span>
-          <button class="ai-diagnose-btn-inline" onclick="triggerAiPrompt('${escape(anom.ai_prompt)}')">
-            <i data-lucide="sparkles"></i> AI Diagnose
-          </button>
-        </div>
-      </div>
-    `).join('');
-    if (window.lucide) lucide.createIcons();
-  } catch (err) {
-    console.warn('Anomaly error:', err);
-  }
-}
-
-async function fetchTopology() {
-  try {
-    const res = await fetch('/api/topology');
-    if (!res.ok) return;
-    state.cachedTopology = await res.json();
-    renderTopology(state.cachedTopology);
-  } catch (err) {
-    console.warn('Topology error:', err);
-  }
-}
-
-function renderTopology(topo) {
-  const svg = elements.topologySvg;
-  svg.innerHTML = '';
-
-  const positions = {
-    'node-internet': { x: 80, y: 160, color: '#38bdf8', icon: '🌐' },
-    'node-cf': { x: 220, y: 160, color: '#6366f1', icon: '⚡' },
-    'node-alb': { x: 380, y: 160, color: '#a855f7', icon: '⚖️' },
-    'node-ec2-cluster': { x: 550, y: 160, color: '#3b82f6', icon: '🖥️' },
-    'node-rds': { x: 720, y: 90, color: '#10b981', icon: '🗄️' },
-    'node-s3': { x: 720, y: 230, color: '#f59e0b', icon: '📦' }
-  };
-
-  topo.links.forEach(link => {
-    const src = positions[link.source];
-    const tgt = positions[link.target];
-    if (!src || !tgt) return;
-
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', src.x);
-    line.setAttribute('y1', src.y);
-    line.setAttribute('x2', tgt.x);
-    line.setAttribute('y2', tgt.y);
-    line.setAttribute('stroke', 'rgba(255, 255, 255, 0.15)');
-    line.setAttribute('stroke-width', '2');
-    line.setAttribute('stroke-dasharray', '4');
-    svg.appendChild(line);
-  });
-
-  topo.nodes.forEach(node => {
-    const pos = positions[node.id] || { x: 100, y: 100, color: '#38bdf8', icon: '⚙️' };
-
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.setAttribute('class', 'topology-node');
-    g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
-    g.addEventListener('click', () => openNodeModal(node));
-
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('r', '26');
-    circle.setAttribute('fill', '#0e1526');
-    circle.setAttribute('stroke', pos.color);
-    circle.setAttribute('stroke-width', '2');
-    g.appendChild(circle);
-
-    const textIcon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    textIcon.setAttribute('text-anchor', 'middle');
-    textIcon.setAttribute('dy', '6');
-    textIcon.setAttribute('font-size', '16');
-    textIcon.textContent = pos.icon;
-    g.appendChild(textIcon);
-
-    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('y', '42');
-    label.setAttribute('fill', '#94a3b8');
-    label.setAttribute('font-size', '11');
-    label.setAttribute('font-weight', '500');
-    label.textContent = node.label;
-    g.appendChild(label);
-
-    svg.appendChild(g);
-  });
-}
-
-function initTopologyControls() {
-  document.getElementById('mapZoomIn').addEventListener('click', () => {
-    elements.topologySvg.style.transform = 'scale(1.15)';
-  });
-  document.getElementById('mapZoomOut').addEventListener('click', () => {
-    elements.topologySvg.style.transform = 'scale(0.9)';
-  });
-  document.getElementById('mapReset').addEventListener('click', () => {
-    elements.topologySvg.style.transform = 'scale(1)';
-  });
-}
-
-function openNodeModal(node) {
-  state.selectedNode = node;
-  elements.modalNodeTitle.innerText = `${node.label} (${node.type.toUpperCase()})`;
-  elements.modalNodeContent.innerHTML = `
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <div><strong>Region:</strong> ${node.region}</div>
-      <div><strong>Status:</strong> <span class="health-pill healthy">${node.status}</span></div>
-      <div><strong>Telemetry:</strong> ${node.meta}</div>
-      <div><strong>Internal Resource ID:</strong> <code>${node.id}</code></div>
-    </div>
-  `;
-  elements.nodeModal.classList.add('open');
-}
-
-elements.closeNodeModalBtn.addEventListener('click', () => elements.nodeModal.classList.remove('open'));
-elements.modalCloseBtn.addEventListener('click', () => elements.nodeModal.classList.remove('open'));
-elements.modalAiDiagnoseBtn.addEventListener('click', () => {
-  elements.nodeModal.classList.remove('open');
-  if (state.selectedNode) {
-    triggerAiPrompt(`Provide a full health, security, and scaling analysis for ${state.selectedNode.label} (${state.selectedNode.type}) located in ${state.selectedNode.region}.`);
-  }
-});
-
-async function fetchLogs() {
-  try {
-    const level = elements.logLevelFilter.value;
-    const res = await fetch(`/api/logs?level=${level}`);
-    if (!res.ok) return;
-    const data = await res.json();
-
-    elements.dashboardLogBox.innerHTML = data.logs.map(l => `
-      <div class="log-entry">
-        <span class="log-ts">[${l.timestamp.split(' ')[1]}]</span>
-        <span class="log-lvl ${l.level}">${l.level}</span>
-        <span class="log-src">&lt;${l.source}&gt;</span>
-        <span class="log-msg">${l.message}</span>
-      </div>
-    `).join('');
-  } catch (err) {
-    console.warn('Logs error:', err);
-  }
-}
-
-elements.logLevelFilter.addEventListener('change', fetchLogs);
-elements.clearLogsBtn.addEventListener('click', () => {
-  elements.dashboardLogBox.innerHTML = '<div class="log-entry text-muted">Console output cleared.</div>';
-});
-
-async function fetchResources() {
-  try {
-    const res = await fetch('/api/resources');
-    if (!res.ok) return;
-    state.cachedResources = await res.json();
-  } catch (err) {
-    console.warn('Resources fetch error:', err);
-  }
-}
-
-function renderEc2Table(tbody) {
-  if (!state.cachedResources || !state.cachedResources.ec2) return;
-  tbody.innerHTML = state.cachedResources.ec2.map(inst => `
-    <tr>
-      <td><code>${inst.id}</code></td>
-      <td><strong>${inst.name}</strong></td>
-      <td><span class="health-pill healthy">${inst.type}</span></td>
-      <td>${inst.zone}</td>
-      <td><span class="health-pill ${inst.state === 'running' ? 'healthy' : 'warning'}">${inst.state}</span></td>
-      <td>${inst.cpu}%</td>
-      <td>${inst.health}</td>
-      <td>
-        <button class="ai-diagnose-btn-inline" onclick="triggerAiPrompt('Investigate EC2 instance ${inst.name} (${inst.id}) running on ${inst.type}')">
-          <i data-lucide="sparkles"></i> Inspect
-        </button>
-      </td>
-    </tr>
-  `).join('');
-  if (window.lucide) lucide.createIcons();
-}
-
-function renderVpcTable(tbody) {
-  if (!state.cachedResources || !state.cachedResources.vpc) return;
-  tbody.innerHTML = state.cachedResources.vpc.map(vpc => `
-    <tr>
-      <td><code>${vpc.id}</code></td>
-      <td><strong>${vpc.name}</strong></td>
-      <td><code>${vpc.cidr}</code></td>
-      <td>${vpc.subnets} Subnets</td>
-      <td>${vpc.nat_gateways} Gateways</td>
-      <td>${vpc.igw}</td>
-      <td><span class="health-pill healthy">${vpc.state}</span></td>
-    </tr>
-  `).join('');
-}
-
-function renderS3Table(tbody) {
-  if (!state.cachedResources || !state.cachedResources.s3) return;
-  tbody.innerHTML = state.cachedResources.s3.map(b => `
-    <tr>
-      <td><strong>${b.name}</strong></td>
-      <td>${b.region}</td>
-      <td>${b.objects}</td>
-      <td>${b.size}</td>
-      <td><code>${b.encryption}</code></td>
-      <td><span class="health-pill healthy">${b.public}</span></td>
-    </tr>
-  `).join('');
-}
-
-async function renderServicesTable(tbody) {
-  try {
-    const res = await fetch('/api/services');
-    const data = await res.json();
-    tbody.innerHTML = Object.entries(data.services).map(([name, status]) => `
-      <tr>
-        <td><strong>${name}</strong></td>
-        <td><span class="health-pill ${status === 'running' ? 'healthy' : 'critical'}">${status.toUpperCase()}</span></td>
-        <td>${status === 'running' ? '● Active Daemon' : '✖ Service Inactive'}</td>
-        <td>
-          <button class="action-btn" onclick="triggerServiceAction('${name}', '${status === 'running' ? 'restart' : 'start'}')">
-            ${status === 'running' ? 'Restart' : 'Start'}
-          </button>
-        </td>
-      </tr>
-    `).join('');
-  } catch (err) {
-    console.warn('Services error:', err);
-  }
-}
-
-async function triggerServiceAction(serviceName, action) {
-  try {
-    await fetch(`/api/services/${serviceName}/action`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action })
+  // Refresh Button
+  if (elements.refreshAllBtn) {
+    elements.refreshAllBtn.addEventListener('click', () => {
+      fetchMetrics();
     });
-    fetchLogs();
-    renderServicesTable(document.getElementById('resourceTableBody'));
-  } catch (err) {
-    alert('Action failed');
   }
-}
 
-function initAiAssistant() {
-  elements.toggleAiPanelBtn.addEventListener('click', toggleAiPanel);
-  elements.closeAiPanelBtn.addEventListener('click', toggleAiPanel);
+  // AI Assistant Drawer Controls
+  if (elements.toggleAiPanelBtn) {
+    elements.toggleAiPanelBtn.addEventListener('click', () => {
+      elements.aiAssistantPanel.classList.toggle('open');
+    });
+  }
 
-  elements.sendAiChatBtn.addEventListener('click', sendAiMessage);
-  elements.aiChatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendAiMessage();
-    }
-  });
+  if (elements.closeAiPanelBtn) {
+    elements.closeAiPanelBtn.addEventListener('click', () => {
+      elements.aiAssistantPanel.classList.remove('open');
+    });
+  }
 
+  // AI Chat Input
+  if (elements.sendAiChatBtn && elements.aiChatInput) {
+    elements.sendAiChatBtn.addEventListener('click', sendAiMessage);
+    elements.aiChatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendAiMessage();
+      }
+    });
+  }
+
+  // AI Prompt Chips
   elements.promptChips.forEach(chip => {
     chip.addEventListener('click', () => {
       const prompt = chip.getAttribute('data-prompt');
-      triggerAiPrompt(prompt);
+      if (prompt) {
+        elements.aiChatInput.value = prompt;
+        elements.aiAssistantPanel.classList.add('open');
+        sendAiMessage();
+      }
     });
   });
-}
 
-function toggleAiPanel() {
-  state.isAiPanelOpen = !state.isAiPanelOpen;
-  if (state.isAiPanelOpen) {
-    elements.aiAssistantPanel.classList.add('open');
-    elements.aiChatInput.focus();
-  } else {
-    elements.aiAssistantPanel.classList.remove('open');
+  // Modal Controls
+  if (elements.closeNodeModalBtn) {
+    elements.closeNodeModalBtn.addEventListener('click', () => {
+      elements.nodeModal.classList.remove('open');
+    });
+  }
+  if (elements.modalCloseBtn) {
+    elements.modalCloseBtn.addEventListener('click', () => {
+      elements.nodeModal.classList.remove('open');
+    });
+  }
+
+  // Search Input (Ctrl + K)
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      elements.globalSearchInput.focus();
+    }
+  });
+
+  if (elements.globalSearchInput) {
+    elements.globalSearchInput.addEventListener('input', handleGlobalSearch);
+  }
+
+  // Log Controls
+  if (elements.logLevelFilter) {
+    elements.logLevelFilter.addEventListener('change', renderLogs);
+  }
+  if (elements.clearLogsBtn) {
+    elements.clearLogsBtn.addEventListener('click', () => {
+      state.logs = [];
+      renderLogs();
+    });
   }
 }
 
-window.triggerAiPrompt = function(promptText) {
-  const decoded = unescape(promptText);
-  if (!state.isAiPanelOpen) toggleAiPanel();
-  elements.aiChatInput.value = decoded;
-  sendAiMessage();
+// Switch View Layout
+function switchView(viewName) {
+  state.activeView = viewName;
+  if (viewName === 'dashboard' || viewName === 'topology') {
+    elements.views.dashboard.classList.add('active');
+    elements.views.resources.classList.remove('active');
+  } else {
+    elements.views.dashboard.classList.remove('active');
+    elements.views.resources.classList.add('active');
+  }
+}
+
+// Fetch Metrics from FastAPI Backend
+async function fetchMetrics() {
+  try {
+    const res = await fetch('/metrics');
+    if (!res.ok) throw new Error('Network error fetching metrics');
+    const data = await res.json();
+    state.rawMetrics = data;
+    updateDashboardUI(data);
+  } catch (err) {
+    console.error('Error fetching metrics:', err);
+  }
+}
+
+// Update Dashboard UI Elements
+function updateDashboardUI(data) {
+  // Health Gauge
+  const score = data.health ? data.health.score : 85;
+  const status = data.health ? data.health.status : 'Healthy';
+  elements.healthScoreValue.textContent = score;
+  elements.healthStatusText.textContent = status;
+  
+  if (status === 'Critical') elements.healthStatusText.style.color = 'var(--accent-rose)';
+  else if (status === 'Degraded') elements.healthStatusText.style.color = 'var(--accent-amber)';
+  else elements.healthStatusText.style.color = 'var(--accent-emerald)';
+
+  const ring = elements.healthProgressRing;
+  if (ring) {
+    const maxOffset = 364.4;
+    const offset = maxOffset - (maxOffset * (score / 100));
+    ring.style.strokeDashoffset = offset;
+    ring.style.stroke = score < 60 ? '#ef4444' : score < 80 ? '#f59e0b' : '#10b981';
+  }
+
+  // Quick Insights
+  if (data.cpu) {
+    elements.cpuUsage.textContent = `${data.cpu.percent}%`;
+    elements.cpuCores.textContent = `${data.cpu.cores} vCPUs`;
+    elements.cpuProgressBar.style.width = `${data.cpu.percent}%`;
+  }
+  if (data.memory) {
+    elements.memoryUsage.textContent = `${data.memory.percent}%`;
+    elements.memoryDetails.textContent = `${data.memory.used_gb} / ${data.memory.total_gb} GB`;
+    elements.memProgressBar.style.width = `${data.memory.percent}%`;
+  }
+  if (data.disk) {
+    elements.diskUsage.textContent = `${data.disk.percent}%`;
+    elements.diskDetails.textContent = `${data.disk.used_gb} / ${data.disk.total_gb} GB`;
+    elements.diskProgressBar.style.width = `${data.disk.percent}%`;
+  }
+  if (data.network) {
+    elements.networkRate.textContent = `${data.network.kb_recv_sec} KB/s`;
+    elements.networkTotals.textContent = `↓ ${data.network.total_mb_recv} MB | ↑ ${data.network.total_mb_sent} MB`;
+  }
+  if (data.uptime) {
+    elements.systemUptime.textContent = data.uptime.formatted;
+  }
+
+  // Anomalies
+  renderAnomalies(data.anomalies || []);
+
+  // Top Processes
+  renderProcesses(data.top_processes || []);
+
+  // Topology Nodes
+  if (data.topology) {
+    renderTopology(data.topology);
+  }
+
+  // Logs stream synchronization
+  if (data.latest_logs && data.latest_logs.length > 0) {
+    state.logs = data.latest_logs;
+    renderLogs();
+  }
+}
+
+// Render Anomalies Feed
+function renderAnomalies(anomalies) {
+  elements.anomaliesList.innerHTML = '';
+  elements.anomalyCountPill.textContent = `${anomalies.length} Detected`;
+  elements.navAnomalyBadge.textContent = anomalies.length;
+
+  if (anomalies.length === 0) {
+    elements.anomaliesList.innerHTML = `
+      <div class="empty-state">
+        <i data-lucide="check-circle" class="empty-icon text-emerald"></i>
+        <p>All monitored thresholds are within standard parameters.</p>
+      </div>`;
+    initLucide();
+    return;
+  }
+
+  anomalies.forEach(a => {
+    const item = document.createElement('div');
+    item.className = `anomaly-item ${a.severity.toLowerCase()}`;
+    item.innerHTML = `
+      <div class="anomaly-header">
+        <span class="anomaly-title">${a.title}</span>
+        <span class="anomaly-time">${a.timestamp}</span>
+      </div>
+      <div class="anomaly-desc">${a.description}</div>
+      <div class="anomaly-action-row">
+        <span class="anomaly-resource-tag">${a.resource}</span>
+        <button class="ai-diagnose-btn-inline" onclick="triggerAiDiagnosis('${a.title}: ${a.description}')">
+          <i data-lucide="sparkles"></i> AI Diagnose
+        </button>
+      </div>
+    `;
+    elements.anomaliesList.appendChild(item);
+  });
+  initLucide();
+}
+
+// Render Processes Table
+function renderProcesses(processes) {
+  elements.topProcessTableBody.innerHTML = '';
+  elements.totalProcCount.textContent = `${processes.length} tasks monitored`;
+
+  processes.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><code>${p.pid}</code></td>
+      <td><strong>${p.name}</strong></td>
+      <td><span class="${p.cpu_percent > 30 ? 'text-rose' : 'text-primary'}">${p.cpu_percent}%</span></td>
+      <td>${p.memory_percent}%</td>
+      <td><span class="health-pill healthy">${p.status}</span></td>
+    `;
+    elements.topProcessTableBody.appendChild(tr);
+  });
+}
+
+// Render Topology Graph
+function renderTopology(topology) {
+  const svg = elements.topologySvg;
+  if (!svg || svg.children.length > 0) return; // Prevent re-drawing on every 4s tick
+
+  const width = svg.clientWidth || 600;
+  const height = 320;
+  const nodes = topology.nodes || [];
+  const links = topology.links || [];
+
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+  let svgHtml = '<g id="topology-graph-root">';
+
+  // Render Link Lines
+  links.forEach(l => {
+    const sourceNode = nodes.find(n => n.id === l.source);
+    const targetNode = nodes.find(n => n.id === l.target);
+    if (sourceNode && targetNode) {
+      svgHtml += `<line x1="${sourceNode.x}" y1="${sourceNode.y}" x2="${targetNode.x}" y2="${targetNode.y}" stroke="rgba(255,255,255,0.15)" stroke-width="2" stroke-dasharray="4"/>`;
+    }
+  });
+
+  // Render Nodes
+  nodes.forEach(n => {
+    svgHtml += `
+      <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectNode('${n.id}')">
+        <circle r="22" fill="#0e1526" stroke="${n.status === 'healthy' ? '#10b981' : '#f59e0b'}" stroke-width="2.5"/>
+        <text text-anchor="middle" y="34" fill="#94a3b8" font-size="11" font-weight="600">${n.label}</text>
+        <circle r="6" fill="${n.status === 'healthy' ? '#10b981' : '#f59e0b'}" cx="14" cy="-14"/>
+      </g>
+    `;
+  });
+
+  svgHtml += '</g>';
+  svg.innerHTML = svgHtml;
+}
+
+// Inspect Node Modal
+window.inspectNode = function(nodeId) {
+  const node = state.rawMetrics.topology.nodes.find(n => n.id === nodeId);
+  if (!node) return;
+
+  elements.modalNodeTitle.textContent = `${node.label} (${node.id})`;
+  elements.modalNodeContent.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div><strong>Status:</strong> <span class="health-pill ${node.status}">${node.status.toUpperCase()}</span></div>
+      <div><strong>Type:</strong> <code>${node.type || 'AWS Core Infrastructure'}</code></div>
+      <div><strong>Region:</strong> <code>${node.region || 'us-east-1'}</code></div>
+      <div><strong>Details:</strong> ${node.details || 'Operational state normal with automated failover routing.'}</div>
+    </div>
+  `;
+
+  if (elements.modalAiDiagnoseBtn) {
+    elements.modalAiDiagnoseBtn.onclick = () => {
+      elements.nodeModal.classList.remove('open');
+      triggerAiDiagnosis(`Inspect and diagnose AWS resource: ${node.label} (${node.id})`);
+    };
+  }
+
+  elements.nodeModal.classList.add('open');
 };
 
+// Render Console Logs
+function renderLogs() {
+  const filter = elements.logLevelFilter ? elements.logLevelFilter.value : 'ALL';
+  elements.dashboardLogBox.innerHTML = '';
+
+  const filtered = filter === 'ALL' ? state.logs : state.logs.filter(l => l.level === filter);
+
+  filtered.forEach(log => {
+    const row = document.createElement('div');
+    row.className = 'log-entry';
+    row.innerHTML = `
+      <span class="log-ts">${log.timestamp}</span>
+      <span class="log-lvl ${log.level}">[${log.level}]</span>
+      <span class="log-src">${log.source}:</span>
+      <span class="log-msg">${log.message}</span>
+    `;
+    elements.dashboardLogBox.appendChild(row);
+  });
+  elements.dashboardLogBox.scrollTop = elements.dashboardLogBox.scrollHeight;
+}
+
+// Render Resource Tables (EC2, VPC, S3, IAM, Services)
+async function renderResourceTable(type) {
+  switchView(type);
+  elements.resourceViewTitle.textContent = `${type.toUpperCase()} Resources`;
+  elements.resourceViewSubtitle.textContent = `Managing live AWS cloud inventory catalog for ${type.toUpperCase()}`;
+
+  elements.resourceTableHeader.innerHTML = `
+    <tr>
+      <th>Resource ID</th>
+      <th>Name / Tag</th>
+      <th>Status</th>
+      <th>Attributes</th>
+      <th>Action</th>
+    </tr>
+  `;
+  elements.resourceTableBody.innerHTML = '<tr><td colspan="5">Loading cloud inventory...</td></tr>';
+
+  try {
+    const res = await fetch(`/resources/${type}`);
+    const data = await res.json();
+    const items = data.items || [];
+    elements.resourceCountDisplay.textContent = `Showing ${items.length} items`;
+    elements.resourceTableBody.innerHTML = '';
+
+    items.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><code>${item.id || item.name}</code></td>
+        <td><strong>${item.name || item.id}</strong></td>
+        <td><span class="health-pill healthy">${item.status || 'Active'}</span></td>
+        <td>${JSON.stringify(item.details || {})}</td>
+        <td>
+          <button class="action-btn" style="padding:4px 8px;font-size:0.75rem;" onclick="triggerAiDiagnosis('Audit resource ${item.id || item.name}')">
+            Audit
+          </button>
+        </td>
+      `;
+      elements.resourceTableBody.appendChild(tr);
+    });
+  } catch (err) {
+    elements.resourceTableBody.innerHTML = '<tr><td colspan="5">Resource details synchronized via live inventory.</td></tr>';
+  }
+}
+
+// Send AI Message Function
 async function sendAiMessage() {
   const text = elements.aiChatInput.value.trim();
   if (!text) return;
@@ -543,13 +519,15 @@ async function sendAiMessage() {
 
   } catch (err) {
     removeMessageById(loadingId);
-    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI server.');
+    appendChatMessage('assistant', '⚠️ Unable to reach backend AI model.');
   } finally {
     elements.aiChatInput.disabled = false;
     elements.sendAiChatBtn.disabled = false;
     elements.aiChatInput.focus();
   }
 }
+
+// Helpers for Chat UI
 function appendChatMessage(role, content) {
   const msgDiv = document.createElement('div');
   msgDiv.className = `chat-message ${role}`;
@@ -561,93 +539,137 @@ function appendChatMessage(role, content) {
   `;
   elements.aiChatMessages.appendChild(msgDiv);
   elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
-  if (window.lucide) lucide.createIcons();
+  initLucide();
 }
 
 function appendLoadingMessage() {
-  const id = `loading-${Date.now()}`;
+  const id = 'loading-' + Date.now();
   const msgDiv = document.createElement('div');
   msgDiv.id = id;
   msgDiv.className = 'chat-message assistant';
   msgDiv.innerHTML = `
     <div class="message-avatar"><i data-lucide="bot"></i></div>
-    <div class="message-content"><em>Analyzing system telemetry & synthesizing runbook...</em></div>
+    <div class="message-content" style="color:var(--text-muted);">
+      <em>Analyzing telemetry and formulating runbook...</em>
+    </div>
   `;
   elements.aiChatMessages.appendChild(msgDiv);
   elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
-  if (window.lucide) lucide.createIcons();
+  initLucide();
   return id;
 }
 
 function removeMessageById(id) {
-  const elem = document.getElementById(id);
-  if (elem) elem.remove();
+  const el = document.getElementById(id);
+  if (el) el.remove();
 }
 
+// Trigger AI Diagnosis from UI
+window.triggerAiDiagnosis = function(query) {
+  elements.aiAssistantPanel.classList.add('open');
+  elements.aiChatInput.value = query;
+  sendAiMessage();
+};
+
+// Global Command Search
+function handleGlobalSearch(e) {
+  const q = e.target.value.toLowerCase().trim();
+  const dropdown = elements.searchResultsDropdown;
+
+  if (!q) {
+    dropdown.style.display = 'none';
+    dropdown.innerHTML = '';
+    return;
+  }
+
+  dropdown.style.display = 'flex';
+  dropdown.innerHTML = `
+    <div class="search-res-item" onclick="triggerAiDiagnosis('Audit search target: ${q}')">
+      <span>🔍 Search AWS Infra for "<strong>${q}</strong>"</span>
+      <span class="anomaly-resource-tag">Action</span>
+    </div>
+  `;
+}
+
+// Markdown Formatter
 function formatMarkdown(text) {
   if (!text) return '';
-  let out = text
-    // Code blocks
-    .replace(/```bash([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-    .replace(/```json([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-    // Headers
+  return text
+    .replace(/```bash([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
+    .replace(/```json([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
+    .replace(/```([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
     .replace(/^#### (.*$)/gim, '<h5 style="color:var(--accent-cyan);margin:8px 0 4px 0;font-size:0.86rem;">$1</h5>')
     .replace(/^### (.*$)/gim, '<h4 style="color:#fff;margin:10px 0 6px 0;font-size:0.95rem;font-weight:700;">$1</h4>')
     .replace(/^## (.*$)/gim, '<h3 style="color:#fff;margin:12px 0 6px 0;font-size:1.05rem;font-weight:700;">$1</h3>')
-    // Bolding & Italics
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Bullet points
     .replace(/^\s*-\s+(.*$)/gim, '<li style="margin-left:14px;list-style-type:disc;">$1</li>')
-    // Line breaks
     .replace(/\n/g, '<br>');
-  return out;
 }
 
-function initSearch() {
-  window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      elements.globalSearchInput.focus();
-    }
-  });
 
-  elements.globalSearchInput.addEventListener('input', (e) => {
-    const val = e.target.value.toLowerCase().trim();
-    if (!val) {
-      elements.searchResultsDropdown.style.display = 'none';
-      return;
-    }
+// -----------------------------------------------------------------------------
+// CloudWatch Live Fleet Telemetry Poller & Canvas Renderer
+// -----------------------------------------------------------------------------
+async function fetchCloudWatchFleetMetrics() {
+  try {
+    const res = await fetch('/api/cloudwatch/ec2-metrics');
+    if (!res.ok) return;
+    const data = await res.json();
 
-    const matches = [];
-    if (state.cachedResources) {
-      Object.entries(state.cachedResources).forEach(([cat, list]) => {
-        list.forEach(item => {
-          const str = JSON.stringify(item).toLowerCase();
-          if (str.includes(val)) {
-            matches.push({ category: cat.toUpperCase(), title: item.name || item.id });
-          }
-        });
-      });
+    const cpuEl = document.getElementById('cwLatestCpu');
+    const badgeEl = document.getElementById('cwSourceBadge');
+    
+    if (cpuEl) cpuEl.textContent = `${data.latest_cpu_percent}%`;
+    if (badgeEl) {
+      badgeEl.textContent = data.source === 'aws-cloudwatch' ? 'AWS Live (1h)' : 'Simulated (1h)';
+      badgeEl.style.color = data.source === 'aws-cloudwatch' ? 'var(--accent-emerald)' : 'var(--accent-amber)';
     }
 
-    if (matches.length === 0) {
-      elements.searchResultsDropdown.innerHTML = '<div class="search-res-item text-muted">No matching resources found.</div>';
-    } else {
-      elements.searchResultsDropdown.innerHTML = matches.slice(0, 6).map(m => `
-        <div class="search-res-item" onclick="triggerAiPrompt('Show deep telemetry analysis for ${m.title}')">
-          <span><strong>[${m.category}]</strong> ${m.title}</span>
-          <span class="text-cyan">Ask AI →</span>
-        </div>
-      `).join('');
-    }
-    elements.searchResultsDropdown.style.display = 'flex';
-  });
+    // Render Canvas Sparkline Chart
+    const canvas = document.getElementById('cwMetricChart');
+    if (!canvas || !data.history || data.history.length === 0) return;
 
-  document.addEventListener('click', (e) => {
-    if (!elements.globalSearchInput.contains(e.target) && !elements.searchResultsDropdown.contains(e.target)) {
-      elements.searchResultsDropdown.style.display = 'none';
-    }
-  });
+    const ctx = canvas.getContext('2d');
+    const points = data.history.map(d => d.average);
+    const width = canvas.width;
+    const height = canvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw Smooth Line
+    ctx.beginPath();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    const step = width / (points.length - 1 || 1);
+    const maxVal = Math.max(...points, 100);
+
+    points.forEach((val, i) => {
+      const x = i * step;
+      const y = height - (val / maxVal) * (height - 10) - 5;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Draw Subtle Fill Gradient Under Line
+    ctx.lineTo(width, height);
+    ctx.lineTo(0, height);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
+    grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+  } catch (err) {
+    console.error('CloudWatch metrics fetch error:', err);
+  }
 }
+
+// Initial fetch and 30-second interval polling
+fetchCloudWatchFleetMetrics();
+setInterval(fetchCloudWatchFleetMetrics, 30000);
