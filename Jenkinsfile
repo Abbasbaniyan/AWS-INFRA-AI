@@ -132,7 +132,7 @@ print('FastAPI application imported successfully.')
                     curl --fail \
                         --retry 5 \
                         --retry-delay 2 \
-                        http://localhost:${APP_PORT}/ \
+                        http://localhost:${APP_PORT}/metrics
                         || (
                             echo "Application health check failed"
                             docker logs ${APP_NAME}
