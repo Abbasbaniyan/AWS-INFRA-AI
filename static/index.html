@@ -11,16 +11,16 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-            .ai-prompts-slider::-webkit-scrollbar {
-        height: 4px;
-        }
-        .ai-prompts-slider::-webkit-scrollbar-track {
-        background: transparent;
-        }
-        .ai-prompts-slider::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.15);
-        border-radius: 4px;
-        }
+    .ai-prompts-slider::-webkit-scrollbar {
+      height: 4px;
+    }
+    .ai-prompts-slider::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .ai-prompts-slider::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
     :root {
       --bg-base: #070b14;
       --bg-surface: #0e1526;
@@ -276,7 +276,7 @@
     .card-header-icon { width: 20px; height: 20px; }
 
     .dashboard-grid-top { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
-    .quick-insights-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .quick-insights-container { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
     .dashboard-grid-middle { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; }
     .dashboard-grid-bottom { display: grid; grid-template-columns: 1fr 1.1fr; gap: 20px; }
 
@@ -593,60 +593,49 @@
             </div>
 
             <div class="card glass-card insight-card">
-            <div class="insight-header">
+              <div class="insight-header">
                 <span class="insight-label">ROOT DISK USAGE</span>
                 <i data-lucide="disc" class="insight-icon text-amber"></i>
-            </div>
-            <div class="insight-value-row">
+              </div>
+              <div class="insight-value-row">
                 <span class="insight-main-val" id="diskUsage">0.0%</span>
                 <span class="insight-sub-val" id="diskDetails">0/0 GB</span>
-            </div>
-            <div class="mini-progress-bar">
+              </div>
+              <div class="mini-progress-bar">
                 <div class="progress-bar-inner bg-amber" id="diskProgressBar" style="width: 0%"></div>
-            </div>
+              </div>
             </div>
 
             <div class="card glass-card insight-card">
-            <div class="insight-header">
+              <div class="insight-header">
                 <span class="insight-label">NETWORK I/O</span>
                 <i data-lucide="arrow-down-up" class="insight-icon text-emerald"></i>
-            </div>
-            <div class="insight-value-row">
+              </div>
+              <div class="insight-value-row">
                 <span class="insight-main-val" id="networkRate">0 KB/s</span>
                 <span class="insight-sub-val" id="networkTotals">↓ 0 MB | ↑ 0 MB</span>
-            </div>
-            <div class="uptime-badge">
+              </div>
+              <div class="uptime-badge">
                 <i data-lucide="clock"></i> Uptime: <strong id="systemUptime">--</strong>
-            </div>
+              </div>
             </div>
 
             <!-- AWS CLOUDWATCH FLEET METRIC CARD -->
             <div class="card glass-card insight-card">
-            <div class="insight-header">
+              <div class="insight-header">
                 <span class="insight-label">CLOUDWATCH FLEET CPU</span>
                 <i data-lucide="activity" class="insight-icon text-cyan"></i>
-            </div>
-            <div class="insight-value-row">
+              </div>
+              <div class="insight-value-row">
                 <span class="insight-main-val" id="cwLatestCpu">--%</span>
                 <span class="insight-sub-val" id="cwSourceBadge">AWS Live (1h)</span>
+              </div>
+              <canvas id="cwMetricChart" width="260" height="40" style="width: 100%; height: 40px; margin-top: 4px;"></canvas>
             </div>
-            <canvas id="cwMetricChart" width="260" height="40" style="width: 100%; height: 40px; margin-top: 4px;"></canvas>
-            </div>
-        </div>
+          </div>
 
         </div>
-        <!-- AWS CLOUDWATCH FLEET METRIC CARD -->
-        <div class="card glass-card insight-card">
-        <div class="insight-header">
-            <span class="insight-label">CLOUDWATCH FLEET CPU</span>
-            <i data-lucide="activity" class="insight-icon text-cyan"></i>
-        </div>
-        <div class="insight-value-row">
-            <span class="insight-main-val" id="cwLatestCpu">--%</span>
-            <span class="insight-sub-val" id="cwSourceBadge">AWS Live (1h)</span>
-        </div>
-        <canvas id="cwMetricChart" width="260" height="40" style="width: 100%; height: 40px; margin-top: 4px;"></canvas>
-        </div>
+
         <!-- ROW 2: TOPOLOGY & ANOMALIES -->
         <div class="dashboard-grid-middle">
           
@@ -671,19 +660,42 @@
             </div>
           </div>
 
-          <div class="card glass-card anomalies-card">
-            <div class="card-header">
-              <div class="card-title-wrap">
-                <i data-lucide="shield-alert" class="card-header-icon text-rose"></i>
-                <h3>Active Anomaly Feed</h3>
+          <div>
+            <div class="card glass-card anomalies-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <i data-lucide="shield-alert" class="card-header-icon text-rose"></i>
+                  <h3>Active Anomaly Feed</h3>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <button class="action-btn" id="simulateAnomalyBtn" onclick="triggerSimulation()" style="padding: 3px 8px; font-size: 0.72rem; border-color: var(--accent-rose); color: var(--accent-rose); cursor: pointer;">
+                    <i data-lucide="flame" style="width: 12px; height: 12px;"></i> Simulate Alert
+                  </button>
+                  <span class="badge-status-pill" id="anomalyCountPill">0 Detected</span>
+                </div>
               </div>
-              <span class="badge-status-pill" id="anomalyCountPill">0 Detected</span>
+  
+              <div class="anomalies-list" id="anomaliesList">
+                <div class="empty-state">
+                  <i data-lucide="check-circle" class="empty-icon text-emerald"></i>
+                  <p>All monitored thresholds are within standard parameters.</p>
+                </div>
+              </div>
             </div>
 
-            <div class="anomalies-list" id="anomaliesList">
-              <div class="empty-state">
-                <i data-lucide="check-circle" class="empty-icon text-emerald"></i>
-                <p>All monitored thresholds are within standard parameters.</p>
+            <!-- INCIDENT RESPONSE & REMEDIATION TIMELINE -->
+            <div class="card glass-card incident-card" style="margin-top: 16px;">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <i data-lucide="shield-check" class="card-header-icon text-emerald"></i>
+                  <h3>AI Incident Response & Remediation Audit</h3>
+                </div>
+                <span class="badge-status-pill" id="incidentCountPill">0 Records</span>
+              </div>
+              <div class="incident-timeline" id="incidentTimeline" style="padding: 14px; max-height: 220px; overflow-y: auto;">
+                <div class="empty-state">
+                  <p style="color: var(--text-muted); font-size: 0.8rem;">No active or past incidents recorded.</p>
+                </div>
               </div>
             </div>
           </div>
@@ -847,6 +859,86 @@
     </div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js"></script> 
+  <script>
+    // Global lock to prevent the dashboard timer from clearing simulated alerts
+    window.isSimulationLocked = false;
+
+    window.triggerSimulation = async function() {
+      console.log("⚡ Triggering alert simulation...");
+      window.isSimulationLocked = true;
+
+      try {
+        const res = await fetch('/api/simulate-anomaly', { method: 'POST' });
+        const data = await res.json();
+        const anomalies = data.anomalies || [];
+
+        const listEl = document.getElementById('anomaliesList');
+        const pillEl = document.getElementById('anomalyCountPill');
+        const badgeEl = document.getElementById('navAnomalyBadge');
+
+        if (pillEl) pillEl.textContent = `${anomalies.length} Detected`;
+        if (badgeEl) badgeEl.textContent = anomalies.length;
+        if (!listEl) return;
+
+        listEl.innerHTML = '';
+
+        anomalies.forEach(a => {
+          const item = document.createElement('div');
+          item.className = `anomaly-item ${a.severity ? a.severity.toLowerCase() : 'critical'}`;
+          item.style.cssText = 'padding: 10px; border-left: 3px solid var(--accent-rose); background: rgba(239, 68, 68, 0.05); margin-bottom: 8px; border-radius: 6px;';
+          
+          let actionType = 'purge_cache';
+          if (a.id && a.id.includes('cpu')) actionType = 'restart_service';
+          if (a.id && a.id.includes('mem')) actionType = 'purge_cache';
+          if (a.id && a.id.includes('ec2')) actionType = 'reboot_ec2';
+
+          item.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong style="color:#fff; font-size:0.85rem;">${a.title}</strong>
+              <span style="font-size:0.7rem; color:var(--text-muted);">${a.timestamp}</span>
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-secondary); margin: 4px 0;">${a.description}</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+              <span style="font-size:0.7rem; color:var(--accent-indigo); font-family:var(--font-mono);">${a.resource}</span>
+              <div style="display:flex; gap:6px;">
+                <button class="ai-diagnose-btn-inline" onclick="window.sendPromptToAi ? window.sendPromptToAi('${a.ai_prompt}') : (document.getElementById('aiChatInput').value='${a.ai_prompt}', document.getElementById('aiAssistantPanel').classList.add('open'))">
+                  <i data-lucide="sparkles" style="width:12px;height:12px;"></i> AI Plan
+                </button>
+                <button class="ai-diagnose-btn-inline" style="border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="window.triggerRemediation('${a.id}', '${actionType}', '${a.resource_id || 'nginx'}')">
+                  <i data-lucide="zap" style="width:12px;height:12px;"></i> Remediate
+                </button>
+              </div>
+            </div>
+          `;
+          listEl.appendChild(item);
+        });
+
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+
+      } catch (err) {
+        console.error("Simulation error:", err);
+      }
+    };
+
+    // Override / attach remediation to safely clear the lock
+    const existingRemediate = window.triggerRemediation;
+    window.triggerRemediation = async function(anomalyId, actionType, target) {
+      window.isSimulationLocked = false;
+      if (typeof existingRemediate === 'function') {
+        await existingRemediate(anomalyId, actionType, target);
+      } else {
+        await fetch('/api/remediate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ anomaly_id: anomalyId, action_type: actionType, target: target })
+        });
+        location.reload();
+      }
+    };
+  </script>
+
 </body>
 </html>

@@ -8,7 +8,8 @@ const state = {
   zoomLevel: 1,
   pan: { x: 0, y: 0 },
   isDragging: false,
-  dragStart: { x: 0, y: 0 }
+  dragStart: { x: 0, y: 0 },
+  isSimulatedActive: false // Simulation lock state
 };
 
 // DOM Selectors Cache
@@ -70,13 +71,21 @@ const elements = {
   resourceTableBody: document.getElementById('resourceTableBody')
 };
 
-// Initialize Application
-document.addEventListener('DOMContentLoaded', () => {
-  initLucide();
-  initEventListeners();
-  fetchMetrics();
-  setInterval(fetchMetrics, 4000);
-});
+// -----------------------------------------------------------------------------
+// Direct Global Simulation Trigger
+// -----------------------------------------------------------------------------
+window.triggerSimulation = async function() {
+  try {
+    state.isSimulatedActive = true; // Lock simulation active
+    const res = await fetch('/api/simulate-anomaly', { method: 'POST' });
+    const data = await res.json();
+    if (data.anomalies) {
+      renderAnomalies(data.anomalies);
+    }
+  } catch (err) {
+    console.error("Simulation trigger failed:", err);
+  }
+};
 
 function initLucide() {
   if (window.lucide) {
@@ -142,6 +151,7 @@ function initEventListeners() {
   if (elements.refreshAllBtn) {
     elements.refreshAllBtn.addEventListener('click', () => {
       fetchMetrics();
+      fetchAnomalies();
     });
   }
 
@@ -242,109 +252,155 @@ async function fetchMetrics() {
   }
 }
 
-// Update Dashboard UI Elements
-function updateDashboardUI(data) {
-  // Health Gauge
-  const score = data.health ? data.health.score : 85;
-  const status = data.health ? data.health.status : 'Healthy';
-  elements.healthScoreValue.textContent = score;
-  elements.healthStatusText.textContent = status;
-  
-  if (status === 'Critical') elements.healthStatusText.style.color = 'var(--accent-rose)';
-  else if (status === 'Degraded') elements.healthStatusText.style.color = 'var(--accent-amber)';
-  else elements.healthStatusText.style.color = 'var(--accent-emerald)';
+// Separate Anomalies Poller to prevent DOM collision
+async function fetchAnomalies() {
+  try {
+    const res = await fetch('/api/anomalies');
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    // If backend returns anomalies, always render them
+    if (data.anomalies && data.anomalies.length > 0) {
+      renderAnomalies(data.anomalies);
+    } else {
+      // If simulation is locked or cards are visible, do not wipe
+      if (state.isSimulatedActive) return;
+      const listEl = document.getElementById('anomaliesList');
+      if (listEl && listEl.querySelectorAll('.anomaly-item').length > 0) {
+        return;
+      }
+      renderAnomalies([]);
+    }
+  } catch (err) {
+    console.error('Error fetching anomalies:', err);
+  }
+}
 
-  const ring = elements.healthProgressRing;
-  if (ring) {
-    const maxOffset = 364.4;
-    const offset = maxOffset - (maxOffset * (score / 100));
-    ring.style.strokeDashoffset = offset;
-    ring.style.stroke = score < 60 ? '#ef4444' : score < 80 ? '#f59e0b' : '#10b981';
-  }
+// Global memory state for active anomalies
+let currentActiveAnomalies = [];
 
-  // Quick Insights
-  if (data.cpu) {
-    elements.cpuUsage.textContent = `${data.cpu.percent}%`;
-    elements.cpuCores.textContent = `${data.cpu.cores} vCPUs`;
-    elements.cpuProgressBar.style.width = `${data.cpu.percent}%`;
+// -----------------------------------------------------------------------------
+// Direct Global Simulation Trigger
+// -----------------------------------------------------------------------------
+window.triggerSimulation = async function() {
+  try {
+    const res = await fetch('/api/simulate-anomaly', { method: 'POST' });
+    const data = await res.json();
+    if (data.anomalies && data.anomalies.length > 0) {
+      currentActiveAnomalies = data.anomalies;
+      renderAnomalies(currentActiveAnomalies);
+    }
+  } catch (err) {
+    console.error("Simulation trigger failed:", err);
   }
-  if (data.memory) {
-    elements.memoryUsage.textContent = `${data.memory.percent}%`;
-    elements.memoryDetails.textContent = `${data.memory.used_gb} / ${data.memory.total_gb} GB`;
-    elements.memProgressBar.style.width = `${data.memory.percent}%`;
-  }
-  if (data.disk) {
-    elements.diskUsage.textContent = `${data.disk.percent}%`;
-    elements.diskDetails.textContent = `${data.disk.used_gb} / ${data.disk.total_gb} GB`;
-    elements.diskProgressBar.style.width = `${data.disk.percent}%`;
-  }
-  if (data.network) {
-    elements.networkRate.textContent = `${data.network.kb_recv_sec} KB/s`;
-    elements.networkTotals.textContent = `↓ ${data.network.total_mb_recv} MB | ↑ ${data.network.total_mb_sent} MB`;
-  }
-  if (data.uptime) {
-    elements.systemUptime.textContent = data.uptime.formatted;
-  }
+};
 
-  // Anomalies
-  renderAnomalies(data.anomalies || []);
-
-  // Top Processes
-  renderProcesses(data.top_processes || []);
-
-  // Topology Nodes
-  if (data.topology) {
-    renderTopology(data.topology);
+// Separate Anomalies Poller
+async function fetchAnomalies() {
+  // IF simulated anomalies are already active on screen, DO NOT overwrite or clear them!
+  if (currentActiveAnomalies.length > 0) {
+    renderAnomalies(currentActiveAnomalies);
+    return;
   }
 
-  // Logs stream synchronization
-  if (data.latest_logs && data.latest_logs.length > 0) {
-    state.logs = data.latest_logs;
-    renderLogs();
+  try {
+    const res = await fetch('/api/anomalies');
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    if (data.anomalies && data.anomalies.length > 0) {
+      currentActiveAnomalies = data.anomalies;
+      renderAnomalies(currentActiveAnomalies);
+    } else {
+      renderAnomalies([]);
+    }
+  } catch (err) {
+    console.error('Error fetching anomalies:', err);
   }
 }
 
 // Render Anomalies Feed
 function renderAnomalies(anomalies) {
-  elements.anomaliesList.innerHTML = '';
-  elements.anomalyCountPill.textContent = `${anomalies.length} Detected`;
-  elements.navAnomalyBadge.textContent = anomalies.length;
+  if (!elements.anomaliesList) return;
+  
+  if (elements.anomalyCountPill) elements.anomalyCountPill.textContent = `${anomalies.length} Detected`;
+  if (elements.navAnomalyBadge) elements.navAnomalyBadge.textContent = anomalies.length;
 
   if (anomalies.length === 0) {
     elements.anomaliesList.innerHTML = `
-      <div class="empty-state">
-        <i data-lucide="check-circle" class="empty-icon text-emerald"></i>
-        <p>All monitored thresholds are within standard parameters.</p>
+      <div class="empty-state" style="padding: 20px; text-align: center;">
+        <i data-lucide="check-circle" class="empty-icon text-emerald" style="width: 32px; height: 32px; margin-bottom: 8px;"></i>
+        <p style="color: var(--text-muted); font-size: 0.82rem;">All monitored thresholds are within standard parameters.</p>
       </div>`;
-    initLucide();
+    if (typeof initLucide === 'function') initLucide();
     return;
   }
 
+  elements.anomaliesList.innerHTML = '';
   anomalies.forEach(a => {
     const item = document.createElement('div');
-    item.className = `anomaly-item ${a.severity.toLowerCase()}`;
+    item.className = `anomaly-item ${a.severity ? a.severity.toLowerCase() : 'critical'}`;
+    
+    let actionType = 'purge_cache';
+    if (a.id && a.id.includes('cpu')) actionType = 'restart_service';
+    if (a.id && a.id.includes('mem')) actionType = 'purge_cache';
+    if (a.id && a.id.includes('disk')) actionType = 'purge_cache';
+    if (a.id && a.id.includes('ec2')) actionType = 'reboot_ec2';
+
     item.innerHTML = `
       <div class="anomaly-header">
         <span class="anomaly-title">${a.title}</span>
         <span class="anomaly-time">${a.timestamp}</span>
       </div>
       <div class="anomaly-desc">${a.description}</div>
-      <div class="anomaly-action-row">
-        <span class="anomaly-resource-tag">${a.resource}</span>
-        <button class="ai-diagnose-btn-inline" onclick="triggerAiDiagnosis('${a.title}: ${a.description}')">
-          <i data-lucide="sparkles"></i> AI Diagnose
-        </button>
+      <div class="anomaly-action-row" style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px;">
+        <span class="anomaly-resource-tag">${a.resource || 'Host'}</span>
+        <div style="display: flex; gap: 6px;">
+          <button class="ai-diagnose-btn-inline" onclick="sendPromptToAi('${a.ai_prompt || a.title}')">
+            <i data-lucide="sparkles" style="width: 13px; height: 13px;"></i> AI Plan
+          </button>
+          <button class="ai-diagnose-btn-inline" style="border-color: var(--accent-emerald); color: var(--accent-emerald);" 
+                  onclick="triggerRemediation('${a.id}', '${actionType}', '${a.resource_id || 'nginx'}')">
+            <i data-lucide="zap" style="width: 13px; height: 13px;"></i> Remediate
+          </button>
+        </div>
       </div>
     `;
     elements.anomaliesList.appendChild(item);
   });
-  initLucide();
+
+  if (typeof initLucide === 'function') initLucide();
 }
+
+// Auto-Remediation Trigger
+window.triggerRemediation = async function(anomalyId, actionType, target) {
+  try {
+    // Clear the active in-memory anomaly list so it returns to empty state
+    currentActiveAnomalies = [];
+    
+    const res = await fetch('/api/remediate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anomaly_id: anomalyId,
+        action_type: actionType,
+        target: target
+      })
+    });
+    const data = await res.json();
+    fetchIncidents();
+    renderAnomalies([]);
+    if (typeof fetchMetrics === 'function') fetchMetrics();
+  } catch (err) {
+    console.error('Remediation error:', err);
+  }
+};
 
 // Render Processes Table
 function renderProcesses(processes) {
+  if (!elements.topProcessTableBody) return;
   elements.topProcessTableBody.innerHTML = '';
-  elements.totalProcCount.textContent = `${processes.length} tasks monitored`;
+  if (elements.totalProcCount) elements.totalProcCount.textContent = `${processes.length} tasks monitored`;
 
   processes.forEach(p => {
     const tr = document.createElement('tr');
@@ -362,7 +418,7 @@ function renderProcesses(processes) {
 // Render Topology Graph
 function renderTopology(topology) {
   const svg = elements.topologySvg;
-  if (!svg || svg.children.length > 0) return; // Prevent re-drawing on every 4s tick
+  if (!svg || svg.children.length > 0) return;
 
   const width = svg.clientWidth || 600;
   const height = 320;
@@ -373,7 +429,6 @@ function renderTopology(topology) {
 
   let svgHtml = '<g id="topology-graph-root">';
 
-  // Render Link Lines
   links.forEach(l => {
     const sourceNode = nodes.find(n => n.id === l.source);
     const targetNode = nodes.find(n => n.id === l.target);
@@ -382,7 +437,6 @@ function renderTopology(topology) {
     }
   });
 
-  // Render Nodes
   nodes.forEach(n => {
     svgHtml += `
       <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectNode('${n.id}')">
@@ -399,6 +453,7 @@ function renderTopology(topology) {
 
 // Inspect Node Modal
 window.inspectNode = function(nodeId) {
+  if (!state.rawMetrics || !state.rawMetrics.topology) return;
   const node = state.rawMetrics.topology.nodes.find(n => n.id === nodeId);
   if (!node) return;
 
@@ -425,6 +480,7 @@ window.inspectNode = function(nodeId) {
 // Render Console Logs
 function renderLogs() {
   const filter = elements.logLevelFilter ? elements.logLevelFilter.value : 'ALL';
+  if (!elements.dashboardLogBox) return;
   elements.dashboardLogBox.innerHTML = '';
 
   const filtered = filter === 'ALL' ? state.logs : state.logs.filter(l => l.level === filter);
@@ -571,6 +627,12 @@ window.triggerAiDiagnosis = function(query) {
   sendAiMessage();
 };
 
+window.sendPromptToAi = function(promptText) {
+  elements.aiAssistantPanel.classList.add('open');
+  elements.aiChatInput.value = promptText;
+  sendAiMessage();
+};
+
 // Global Command Search
 function handleGlobalSearch(e) {
   const q = e.target.value.toLowerCase().trim();
@@ -607,7 +669,6 @@ function formatMarkdown(text) {
     .replace(/\n/g, '<br>');
 }
 
-
 // -----------------------------------------------------------------------------
 // CloudWatch Live Fleet Telemetry Poller & Canvas Renderer
 // -----------------------------------------------------------------------------
@@ -626,7 +687,6 @@ async function fetchCloudWatchFleetMetrics() {
       badgeEl.style.color = data.source === 'aws-cloudwatch' ? 'var(--accent-emerald)' : 'var(--accent-amber)';
     }
 
-    // Render Canvas Sparkline Chart
     const canvas = document.getElementById('cwMetricChart');
     if (!canvas || !data.history || data.history.length === 0) return;
 
@@ -637,7 +697,6 @@ async function fetchCloudWatchFleetMetrics() {
 
     ctx.clearRect(0, 0, width, height);
 
-    // Draw Smooth Line
     ctx.beginPath();
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 2;
@@ -655,7 +714,6 @@ async function fetchCloudWatchFleetMetrics() {
     });
     ctx.stroke();
 
-    // Draw Subtle Fill Gradient Under Line
     ctx.lineTo(width, height);
     ctx.lineTo(0, height);
     ctx.closePath();
@@ -670,6 +728,122 @@ async function fetchCloudWatchFleetMetrics() {
   }
 }
 
-// Initial fetch and 30-second interval polling
-fetchCloudWatchFleetMetrics();
-setInterval(fetchCloudWatchFleetMetrics, 30000);
+// -----------------------------------------------------------------------------
+// Auto-Remediation Trigger & Incident Timeline Poller
+// -----------------------------------------------------------------------------
+window.triggerRemediation = async function(anomalyId, actionType, target) {
+  try {
+    state.isSimulatedActive = false; // Reset lock on remediation
+    const res = await fetch('/api/remediate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anomaly_id: anomalyId,
+        action_type: actionType,
+        target: target
+      })
+    });
+    const data = await res.json();
+    fetchIncidents();
+    fetchAnomalies();
+    if (typeof fetchMetrics === 'function') fetchMetrics();
+  } catch (err) {
+    console.error('Remediation error:', err);
+  }
+};
+
+async function fetchIncidents() {
+  try {
+    const res = await fetch('/api/incidents');
+    const data = await res.json();
+    const timeline = document.getElementById('incidentTimeline');
+    const pill = document.getElementById('incidentCountPill');
+    if (!timeline) return;
+
+    if (pill) pill.textContent = `${data.incidents.length} Records`;
+    timeline.innerHTML = '';
+
+    if (!data.incidents || data.incidents.length === 0) {
+      timeline.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">No incidents logged.</p>';
+      return;
+    }
+
+    data.incidents.forEach(inc => {
+      const el = document.createElement('div');
+      el.style.cssText = 'border-bottom:1px solid rgba(255,255,255,0.06); padding:8px 0; font-size:0.8rem;';
+      el.innerHTML = `
+        <div style="display:flex; justify-content:space-between;">
+          <strong style="color:var(--accent-emerald);">⚡ Action: ${inc.action} (${inc.target})</strong>
+          <span style="color:var(--text-muted);">${inc.end_time}</span>
+        </div>
+        <div style="color:var(--text-secondary); margin-top:2px;">${inc.details}</div>
+        <div style="color:var(--accent-cyan); font-size:0.75rem; margin-top:2px;">Post-Health Score: ${inc.health_post_action}/100</div>
+      `;
+      timeline.appendChild(el);
+    });
+  } catch (err) {
+    console.error('Fetch incidents error:', err);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// App Initialization & Timers
+// -----------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+  initEventListeners();
+  initLucide();
+  
+  fetchMetrics();
+  fetchAnomalies();
+  fetchCloudWatchFleetMetrics();
+  fetchIncidents();
+
+  setInterval(fetchMetrics, 3000);
+  setInterval(fetchAnomalies, 4000);
+  setInterval(fetchCloudWatchFleetMetrics, 30000);
+  // Persistent Simulated Alert State
+  let simulationActive = false;
+
+  const simBtn = document.getElementById('simulateAnomalyBtn');
+  if (simBtn) {
+    simBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      simulationActive = true;
+
+      try {
+        const res = await fetch('/api/simulate-anomaly', { method: 'POST' });
+        const data = await res.json();
+        if (data.anomalies) {
+          renderAnomalies(data.anomalies);
+        }
+      } catch (err) {
+        console.error('Simulation error:', err);
+      }
+    });
+  }
+
+  // Update fetchAnomalies to respect active simulation
+  window.fetchAnomalies = async function() {
+    if (simulationActive) return; // Prevent overwriting while simulated alert is active
+
+    try {
+      const res = await fetch('/api/anomalies');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.anomalies) {
+        renderAnomalies(data.anomalies);
+      }
+    } catch (err) {
+      console.error('Fetch anomalies error:', err);
+    }
+  };
+
+  // Reset simulation state upon remediation
+  const originalRemediate = window.triggerRemediation;
+  window.triggerRemediation = async function(anomalyId, actionType, target) {
+    simulationActive = false;
+    if (typeof originalRemediate === 'function') {
+      await originalRemediate(anomalyId, actionType, target);
+    }
+  };
+});

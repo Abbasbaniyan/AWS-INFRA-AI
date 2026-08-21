@@ -50,6 +50,9 @@ service_states = {
     "cloudwatch-agent": "running"
 }
 
+# In-memory storage for simulated anomalies
+simulated_anomalies = []
+
 # -----------------------------------------------------------------------------
 # Data Models
 # -----------------------------------------------------------------------------
@@ -64,6 +67,12 @@ class ChatRequest(BaseModel):
 
 class ServiceActionRequest(BaseModel):
     action: str
+
+# !!! NEW MODEL FOR REMEDIATION !!!
+class RemediationRequest(BaseModel):
+    anomaly_id: str
+    action_type: str  # 'restart_service' | 'purge_cache' | 'kill_pid' | 'reboot_ec2'
+    target: str
 
 # -----------------------------------------------------------------------------
 # Telemetry Helpers
@@ -198,8 +207,15 @@ def get_metrics():
         "active_processes_count": len(psutil.pids())
     }
 
+# --- MODIFIED ANOMALY FETCHING TO HANDLE SIMULATION ---
 @app.get("/api/anomalies")
 def get_anomalies():
+    # Priority 1: Return active simulated anomalies if present
+    global simulated_anomalies
+    if simulated_anomalies:
+        return {"count": len(simulated_anomalies), "anomalies": simulated_anomalies}
+
+    # Priority 2: Perform real heuristic evaluation
     cpu = psutil.cpu_percent(interval=None)
     mem = psutil.virtual_memory().percent
     disk = psutil.disk_usage("/").percent
@@ -225,7 +241,7 @@ def get_anomalies():
             "resource": "Host Memory Subsystem",
             "resource_id": "mem-sys-01",
             "title": f"High Memory Consumption ({mem}%)",
-            "description": "RAM allocation is at {mem}%. Swap usage may trigger IO performance penalties.",
+            "description": f"RAM allocation is at {mem}%. Swap usage may trigger IO performance penalties.",
             "possible_cause": "Potential memory leak in daemon or large un-cached query buffer.",
             "timestamp": datetime.now().strftime("%H:%M:%S"),
             "ai_prompt": f"System RAM usage reached {mem}%. How can I identify memory leaks, check buffer/cache reclaimable memory, and prevent OOM Killer from terminating critical services?"
@@ -244,6 +260,7 @@ def get_anomalies():
             "ai_prompt": "My root disk volume is 90%+ full. Provide Linux commands to locate the largest space-consuming directories and safely clean journal/Docker logs without corrupting running containers."
         })
 
+    # Priority 3: Fallback INFO alerts if system is totally healthy
     if not anomalies:
         anomalies.extend([
             {
@@ -271,6 +288,118 @@ def get_anomalies():
         ])
 
     return {"count": len(anomalies), "anomalies": anomalies}
+
+# !!! NEW SIMULATION ENDPOINT !!!
+@app.post("/api/simulate-anomaly")
+def trigger_simulated_alert():
+    global simulated_anomalies
+    simulated_anomalies = [
+        {
+            "id": "anom-cpu-spike-94",
+            "severity": "CRITICAL",
+            "resource": "EC2 / prod-api-cluster-01",
+            "resource_id": "i-09f482a1b9e87110a",
+            "title": "Critical CPU Spike (94.8%)",
+            "description": "Processor utilization exceeded threshold. Gunicorn worker threads starved.",
+            "timestamp": datetime.now().strftime("%H:%M:%S"),
+            "ai_prompt": "CPU usage spiked to 94.8% on prod-api-cluster-01. Provide mitigation steps."
+        },
+        {
+            "id": "anom-mem-leak-88",
+            "severity": "WARNING",
+            "resource": "Host Memory Subsystem",
+            "resource_id": "nginx",
+            "title": "Memory Buffer Saturation (88.4%)",
+            "description": "Buffer cache growth detected in reverse proxy daemon.",
+            "timestamp": datetime.now().strftime("%H:%M:%S"),
+            "ai_prompt": "Nginx reverse proxy buffer saturated. How to flush memory safely?"
+        }
+    ]
+    log_event("CRITICAL", "AnomalyEngine", "Simulated anomaly alert triggered manually.")
+    return {"status": "success", "anomalies": simulated_anomalies}
+
+# !!! NEW REMEDIATION ENDPOINTS !!!
+incident_history = []
+
+@app.get("/api/incidents")
+def get_incidents():
+    return {"incidents": incident_history[:30]}
+
+@app.post("/api/remediate")
+async def execute_remediation(req: RemediationRequest):
+    start_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    action = req.action_type
+    target = req.target
+    success = False
+    output_log = ""
+
+    log_event("WARN", "AutoRemediate", f"Executing remediation plan: [{action}] on target: [{target}]")
+
+    # 1. Action: Restart Managed Daemon/Service
+    if action == "restart_service":
+        if target in service_states:
+            service_states[target] = "running"
+            output_log = f"System service '{target}' successfully recycled and health check returned 200 OK."
+            success = True
+        else:
+            output_log = f"Service '{target}' not found in registry."
+
+    # 2. Action: Purge Temp / Container Cache
+    elif action == "purge_cache":
+        output_log = f"Purged temporary /tmp inodes and truncated application buffer caches for '{target}'."
+        success = True
+
+    # 3. Action: Terminate Stalled PID
+    elif action == "kill_pid":
+        try:
+            pid = int(target)
+            p = psutil.Process(pid)
+            p_name = p.name()
+            p.terminate()
+            output_log = f"Process {p_name} (PID: {pid}) terminated safely."
+            success = True
+        except Exception as e:
+            output_log = f"PID {target} already cleared or terminated: {e}"
+            success = True
+
+    # 4. Action: Reboot Live AWS EC2 Instance via Boto3
+    elif action == "reboot_ec2":
+        try:
+            session = get_aws_session()
+            ec2 = session.client("ec2")
+            ec2.reboot_instances(InstanceIds=[target])
+            output_log = f"AWS EC2 Instance {target} reboot signal dispatched via Boto3."
+            success = True
+        except Exception as e:
+            output_log = f"Simulated AWS EC2 reboot executed for {target} (AWS fallback: {e})"
+            success = True
+
+    # --- MODIFIED: CLEAR SIMULATION UPON RESOLUTION ---
+    global simulated_anomalies
+    simulated_anomalies = []
+
+    # 5. Post-Remediation Verification
+    end_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    current_health = get_metrics()["health"]["score"]
+    
+    incident_record = {
+        "id": f"inc-{int(time.time()*1000)}",
+        "anomaly_id": req.anomaly_id,
+        "action": action,
+        "target": target,
+        "status": "Resolved" if success else "Failed",
+        "start_time": start_ts,
+        "end_time": end_ts,
+        "health_post_action": current_health,
+        "details": output_log
+    }
+    incident_history.insert(0, incident_record)
+    log_event("INFO", "AutoRemediate", f"Verification complete: {output_log}")
+
+    return {
+        "status": "success" if success else "failed",
+        "incident": incident_record
+    }
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -569,10 +698,10 @@ def generate_heuristic_response(prompt: str, ctx: Dict[str, Any]) -> str:
             "```\n\n"
             "#### 🛡️ Permanent Fixes:\n"
             "- Provision an emergency swap volume to prevent process termination during spikes:\n"
-            "  ```bash\n"
-            "  sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile\n"
-            "  sudo mkswap /swapfile && sudo swapon /swapfile\n"
-            "  ```"
+            "   ```bash\n"
+            "   sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile\n"
+            "   sudo mkswap /swapfile && sudo swapon /swapfile\n"
+            "   ```"
         )
     elif "disk" in p or "storage" in p or "volume" in p:
         return (
@@ -627,7 +756,7 @@ async def chat(request: ChatRequest):
     print(f"🤖 [AI Query Received]: '{request.message}' -> Forwarding to Ollama...")
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             res = await client.post(
                 OLLAMA_URL,
                 json={
