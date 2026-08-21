@@ -2,18 +2,10 @@ pipeline {
     agent any
 
     environment {
-        // Application Configurations
-        APP_NAME        = 'aws-infra-ai-assistant'
-        DOCKER_IMAGE    = "${APP_NAME}:${BUILD_NUMBER}"
-        DOCKER_REGISTRY = "127.0.0.1:5000" // Or your AWS ECR URI
-        PYTHON_VERSION  = '3.11'
-        
-        // Target Deployment Server Port
-        APP_PORT        = '8000'
-
-        // AWS Credentials from Jenkins Credentials Store (Manage Jenkins -> Credentials)
-        AWS_CREDENTIALS_ID = 'aws-credentials'
-        AWS_DEFAULT_REGION = 'us-east-1'
+        APP_NAME   = 'aws-infra-ai-assistant'
+        APP_PORT   = '8000'
+        OLLAMA_URL = 'http://host.docker.internal:11434/api/generate'
+        OLLAMA_MODEL = 'llama3.2:1b'
     }
 
     options {
@@ -23,61 +15,73 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout Source') {
             steps {
-                echo "📦 Checking out codebase from repository..."
+                echo 'Checking out source code...'
                 checkout scm
             }
         }
 
         stage('Setup Python Environment') {
             steps {
-                echo "🐍 Initializing Python virtual environment..."
+                echo 'Setting up Python environment...'
+
                 sh '''
                     python3 -m venv venv
                     . venv/bin/activate
+
                     pip install --upgrade pip
+
                     if [ -f requirements.txt ]; then
                         pip install -r requirements.txt
-                    else
-                        pip install fastapi uvicorn psutil boto3 httpx requests pydantic python-dotenv flake8 pytest
                     fi
+
+                    pip install flake8
                 '''
             }
         }
 
         stage('Lint & Code Quality') {
             steps {
-                echo "🔍 Running static analysis & linting checks..."
+                echo 'Running Python lint checks...'
+
                 sh '''
                     . venv/bin/activate
-                    # Stop build if there are Python syntax errors or undefined names
-                    flake8 main.py --count --select=E9,F63,F7,F82 --show-source --statistics
-                    # Exit-zero treats all errors as warnings
-                    flake8 main.py --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+                    flake8 main.py \
+                        --count \
+                        --select=E9,F63,F7,F82 \
+                        --show-source \
+                        --statistics
                 '''
             }
         }
 
-        stage('Security & Dependency Scan') {
+        stage('Security Scan') {
             steps {
-                echo "🔒 Scanning dependencies for known vulnerabilities..."
+                echo 'Running security scan...'
+
                 sh '''
                     . venv/bin/activate
-                    pip install safety bandit || true
+
+                    pip install bandit
+
                     bandit -r main.py -ll || true
                 '''
             }
         }
 
-        stage('Unit & Health Check Tests') {
+        stage('Application Import Test') {
             steps {
-                echo "🧪 Verifying core FastAPI endpoints..."
+                echo 'Testing FastAPI application imports...'
+
                 sh '''
                     . venv/bin/activate
+
                     python3 -c "
 import main
-print('✅ FastAPI app module syntax and imports verified successfully.')
+print('FastAPI application imported successfully.')
 "
                 '''
             }
@@ -85,57 +89,78 @@ print('✅ FastAPI app module syntax and imports verified successfully.')
 
         stage('Docker Build') {
             steps {
-                echo "🐳 Building Docker image for CloudOps dashboard..."
+                echo 'Building Docker image...'
+
                 sh '''
-                    docker build -t ${APP_NAME}:latest -t ${DOCKER_IMAGE} .
+                    docker build \
+                        -t ${APP_NAME}:latest \
+                        -t ${APP_NAME}:${BUILD_NUMBER} \
+                        .
                 '''
             }
         }
 
         stage('Deploy Container') {
             steps {
-                echo "🚀 Deploying AWS Infrastructure AI Assistant locally / to EC2..."
+                echo 'Deploying application container...'
+
                 sh '''
-                    # Stop and remove existing running container if present
                     docker stop ${APP_NAME} || true
                     docker rm ${APP_NAME} || true
 
-                    # Run new container version
                     docker run -d \
                         --name ${APP_NAME} \
                         --restart always \
+                        --add-host=host.docker.internal:host-gateway \
                         -p ${APP_PORT}:8000 \
-                        -e OLLAMA_URL="http://host.docker.internal:11434/api/generate" \
-                        -e OLLAMA_MODEL="llama3.2:1b" \
+                        -e OLLAMA_URL="${OLLAMA_URL}" \
+                        -e OLLAMA_MODEL="${OLLAMA_MODEL}" \
                         ${APP_NAME}:latest
 
-                    echo "✅ Application running at http://localhost:${APP_PORT}"
+                    echo "Application deployed on port ${APP_PORT}"
                 '''
             }
         }
 
-        stage('Post-Deployment Verification') {
+        stage('Post Deployment Check') {
             steps {
-                echo "🩺 Running sanity health checks against live container..."
+                echo 'Verifying deployed application...'
+
                 sh '''
-                    sleep 5
-                    curl --fail --retry 5 --retry-delay 2 http://localhost:${APP_PORT}/metrics || (echo "❌ Health check failed" && exit 1)
-                    echo "✅ Metrics endpoint returned 200 OK"
+                    sleep 10
+
+                    curl --fail \
+                        --retry 5 \
+                        --retry-delay 2 \
+                        http://localhost:${APP_PORT}/ \
+                        || (
+                            echo "Application health check failed"
+                            docker logs ${APP_NAME}
+                            exit 1
+                        )
+
+                    echo "Application is responding successfully."
                 '''
             }
         }
     }
 
     post {
+
         always {
-            echo "🧹 Cleaning up temporary workspace artifacts..."
-            sh 'rm -rf venv __pycache__'
+            echo 'Cleaning Jenkins workspace artifacts...'
+
+            sh '''
+                rm -rf venv __pycache__
+            '''
         }
+
         success {
-            echo "🎉 Pipeline succeeded! AWS Infra AI Assistant has been successfully deployed."
+            echo 'Pipeline completed successfully. AWS Infra AI is deployed.'
         }
+
         failure {
-            echo "❌ Pipeline failed! Please inspect stage execution logs."
+            echo 'Pipeline failed. Check the failed stage and console logs.'
         }
     }
 }
