@@ -35,11 +35,40 @@ print('Application imported successfully!')
                 '''
             }
         }
+
+        stage('Deploy Application') {
+            steps {
+                echo 'Deploying application...'
+
+                sh '''
+                    pkill -f "uvicorn main:app" || true
+
+                    nohup venv/bin/uvicorn main:app \
+                    --host 0.0.0.0 \
+                    --port 8000 \
+                    > app.log 2>&1 &
+                '''
+
+                echo 'Application deployed successfully!'
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                echo 'Verifying application...'
+
+                sh '''
+                    sleep 5
+
+                    curl -f http://localhost:8000/ || exit 1
+                '''
+            }
+        }
     }
 
     post {
         success {
-            echo 'Python setup and application test successful!'
+            echo 'CI/CD Pipeline completed successfully!'
         }
 
         failure {
