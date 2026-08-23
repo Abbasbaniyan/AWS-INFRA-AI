@@ -1,55 +1,64 @@
 pipeline {
     agent any
 
+    environment {
+        IMAGE_NAME = 'aws-infra-ai'
+        CONTAINER_NAME = 'aws-infra-ai'
+        APP_PORT = '8000'
+    }
+
     stages {
 
-        stage('Setup Python Environment') {
+        stage('Checkout') {
             steps {
-                echo 'Setting up Python environment...'
+                echo 'Checking out latest source code...'
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo 'Building Docker image...'
 
                 sh '''
-                    python3 --version
-
-                    python3 -m venv venv
-
-                    . venv/bin/activate
-
-                    pip install --upgrade pip
-
-                    pip install -r requirements.txt
+                    docker build -t ${IMAGE_NAME}:latest .
                 '''
             }
         }
 
-        stage('Test Application') {
+        stage('Test Docker Image') {
             steps {
-                echo 'Testing Python application...'
+                echo 'Testing Docker image...'
 
                 sh '''
-                    . venv/bin/activate
-
-                    python3 -c "
-import main
-print('Application imported successfully!')
-"
+                    docker run --rm \
+                    ${IMAGE_NAME}:latest \
+                    python -c "import main; print('Application imported successfully!')"
                 '''
             }
         }
 
-        stage('Deploy Application') {
+        stage('Stop Old Container') {
             steps {
-                echo 'Deploying application...'
+                echo 'Stopping existing application container...'
 
                 sh '''
-                    pkill -f "uvicorn main:app" || true
-
-                    nohup venv/bin/uvicorn main:app \
-                    --host 0.0.0.0 \
-                    --port 8000 \
-                    > app.log 2>&1 &
+                    docker stop ${CONTAINER_NAME} || true
+                    docker rm ${CONTAINER_NAME} || true
                 '''
+            }
+        }
 
-                echo 'Application deployed successfully!'
+        stage('Deploy Container') {
+            steps {
+                echo 'Deploying application container...'
+
+                sh '''
+                    docker run -d \
+                    --name ${CONTAINER_NAME} \
+                    -p ${APP_PORT}:8000 \
+                    ${IMAGE_NAME}:latest
+                '''
             }
         }
 
@@ -60,7 +69,9 @@ print('Application imported successfully!')
                 sh '''
                     sleep 5
 
-                    curl -f http://localhost:8000/ || exit 1
+                    curl -f http://localhost:${APP_PORT}/ || exit 1
+
+                    echo "Application is running successfully!"
                 '''
             }
         }
@@ -68,11 +79,15 @@ print('Application imported successfully!')
 
     post {
         success {
+            echo '======================================'
             echo 'CI/CD Pipeline completed successfully!'
+            echo 'Docker container deployed successfully.'
+            echo '======================================'
         }
 
         failure {
-            echo 'Pipeline failed. Check the logs.'
+            echo 'Pipeline failed. Check the Jenkins console logs.'
+            sh 'docker ps -a || true'
         }
     }
 }
