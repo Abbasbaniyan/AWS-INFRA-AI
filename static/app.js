@@ -239,6 +239,160 @@ function switchView(viewName) {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Update Dashboard UI with Live Metrics
+// -----------------------------------------------------------------------------
+function updateDashboardUI(data) {
+  if (!data) return;
+
+  const cpu = data.cpu || {};
+  const memory = data.memory || {};
+  const disk = data.disk || {};
+  const uptime = data.uptime || {};
+  const health = data.health || {};
+  const network = data.network || {};
+
+  // ---------------------------------------------------------------------------
+  // Health Score
+  // ---------------------------------------------------------------------------
+  const healthScore = Number(health.score ?? 0);
+
+  if (elements.healthScoreValue) {
+    elements.healthScoreValue.textContent = Math.round(healthScore);
+  }
+
+  if (elements.healthStatusText) {
+    elements.healthStatusText.textContent =
+      health.status || 'Unknown';
+  }
+
+  if (elements.healthyCount) {
+    elements.healthyCount.textContent =
+      health.healthy_components ?? 0;
+  }
+
+  if (elements.warningCount) {
+    elements.warningCount.textContent =
+      health.warning_components ?? 0;
+  }
+
+  if (elements.criticalCount) {
+    elements.criticalCount.textContent =
+      health.critical_components ?? 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Health Progress Ring
+  // ---------------------------------------------------------------------------
+  if (elements.healthProgressRing) {
+    const radius = 58;
+    const circumference = 2 * Math.PI * radius;
+
+    elements.healthProgressRing.style.strokeDasharray =
+      `${circumference}`;
+
+    elements.healthProgressRing.style.strokeDashoffset =
+      `${circumference * (1 - healthScore / 100)}`;
+
+    if (health.color) {
+      elements.healthProgressRing.style.stroke = health.color;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // CPU
+  // ---------------------------------------------------------------------------
+  const cpuPercent = Number(cpu.percent ?? 0);
+
+  if (elements.cpuUsage) {
+    elements.cpuUsage.textContent =
+      `${cpuPercent.toFixed(1)}%`;
+  }
+
+  if (elements.cpuCores) {
+    elements.cpuCores.textContent =
+      `${cpu.cores ?? 0} cores`;
+  }
+
+  if (elements.cpuProgressBar) {
+    elements.cpuProgressBar.style.width =
+      `${Math.min(cpuPercent, 100)}%`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Memory
+  // ---------------------------------------------------------------------------
+  const memoryPercent = Number(memory.percent ?? 0);
+
+  if (elements.memoryUsage) {
+    elements.memoryUsage.textContent =
+      `${memoryPercent.toFixed(1)}%`;
+  }
+
+  if (elements.memoryDetails) {
+    elements.memoryDetails.textContent =
+      `${memory.used_gb ?? 0} GB / ${memory.total_gb ?? 0} GB`;
+  }
+
+  if (elements.memProgressBar) {
+    elements.memProgressBar.style.width =
+      `${Math.min(memoryPercent, 100)}%`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Disk
+  // ---------------------------------------------------------------------------
+  const diskPercent = Number(disk.percent ?? 0);
+
+  if (elements.diskUsage) {
+    elements.diskUsage.textContent =
+      `${diskPercent.toFixed(1)}%`;
+  }
+
+  if (elements.diskDetails) {
+    elements.diskDetails.textContent =
+      `${disk.used_gb ?? 0} GB / ${disk.total_gb ?? 0} GB`;
+  }
+
+  if (elements.diskProgressBar) {
+    elements.diskProgressBar.style.width =
+      `${Math.min(diskPercent, 100)}%`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Network
+  // ---------------------------------------------------------------------------
+  if (elements.networkRate) {
+    elements.networkRate.textContent =
+      `${Number(network.kb_sent_sec ?? 0).toFixed(1)} KB/s`;
+  }
+
+  if (elements.networkTotals) {
+    elements.networkTotals.textContent =
+      `↑ ${Number(network.total_sent_mb ?? 0).toFixed(2)} MB  |  ↓ ${Number(network.total_recv_mb ?? 0).toFixed(2)} MB`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Uptime
+  // ---------------------------------------------------------------------------
+  if (elements.systemUptime) {
+    elements.systemUptime.textContent =
+      uptime.formatted || '0h 0m 0s';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Top Processes
+  // ---------------------------------------------------------------------------
+  if (Array.isArray(data.top_processes)) {
+    renderProcesses(data.top_processes);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Store current metrics
+  // ---------------------------------------------------------------------------
+  state.metrics = data;
+}
+
 // Fetch Metrics from FastAPI Backend
 async function fetchMetrics() {
   try {
