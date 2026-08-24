@@ -8,6 +8,7 @@ pipeline {
         HOST_PORT          = '8000'
         CONTAINER_PORT     = '8000'
         AWS_DEFAULT_REGION = 'eu-north-1'
+        GROQ_API_KEY       = 'gsk_your_actual_key_here'
     }
 
     stages {
@@ -54,6 +55,7 @@ pipeline {
                             --restart unless-stopped \
                             -p ${HOST_PORT}:${CONTAINER_PORT} \
                             -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
+                            -e GROQ_API_KEY="${GROQ_API_KEY}" \
                             ${IMAGE_NAME}:${BUILD_NUMBER}
                     '''
                 }
@@ -106,6 +108,7 @@ pipeline {
                         --restart unless-stopped \
                         -p ${HOST_PORT}:${CONTAINER_PORT} \
                         -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
+                        -e GROQ_API_KEY="${GROQ_API_KEY}" \
                         ${PREV_IMAGE}
                     echo "Rollback completed successfully."
                 else
