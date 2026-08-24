@@ -30,7 +30,8 @@ pipeline {
         stage('Docker Build') {
             steps {
                 sh '''
-                    docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} -t ${IMAGE_NAME}:latest .
+                    export DOCKER_BUILDKIT=0
+                    docker build --network=host -t ${IMAGE_NAME}:${BUILD_NUMBER} -t ${IMAGE_NAME}:latest .
                 '''
             }
         }
