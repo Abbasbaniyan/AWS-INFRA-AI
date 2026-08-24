@@ -153,6 +153,14 @@ def get_aws_session():
 # -----------------------------------------------------------------------------
 # Core API Endpoints
 # -----------------------------------------------------------------------------
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": "2.4.0"
+    }
+
 @app.get("/metrics")
 def get_metrics():
     cpu = psutil.cpu_percent(interval=None)
@@ -611,69 +619,101 @@ Format responses cleanly with markdown, code blocks, and clear step-by-step acti
 
 def generate_heuristic_response(prompt: str, ctx: Dict[str, Any]) -> str:
     p = prompt.lower()
-    if "cpu" in p or "spike" in p or "utilization" in p:
+    
+    # 1. EC2 Queries
+    if "ec2" in p or "instance" in p or "server" in p:
+        return (
+            "### 🖥️ Amazon EC2 (Elastic Compute Cloud) Overview\n\n"
+            "Amazon EC2 provides scalable compute capacity in the cloud, allowing on-demand virtual machine deployment.\n\n"
+            "#### 🛠️ Useful Management & Troubleshooting Commands:\n"
+            "```bash\n"
+            "# List all running instances in current region\n"
+            "aws ec2 describe-instances --filters 'Name=instance-state-name,Values=running' --output table\n\n"
+            "# Inspect system logs of a specific instance\n"
+            "aws ec2 get-console-output --instance-id <instance-id>\n\n"
+            "# Reboot instance safely via CLI\n"
+            "aws ec2 reboot-instances --instance-ids <instance-id>\n"
+            "```\n\n"
+            "#### 💡 Production Best Practices:\n"
+            "- Attach an **IAM Role (Instance Profile)** rather than saving access keys on the instance.\n"
+            "- Configure CloudWatch alarms for CPU > 80% and disk space headroom."
+        )
+
+    # 2. CPU / Performance Spikes
+    elif "cpu" in p or "spike" in p or "load" in p:
         cpu_val = ctx.get('cpu', {}).get('percent', 'N/A')
         cores_val = ctx.get('cpu', {}).get('cores', 'N/A')
         return (
             "### 🔍 Incident Analysis: Elevated CPU Load\n\n"
-            f"**Real-Time Host Telemetry:**\n"
-            f"- Processor Utilization: **{cpu_val}%**\n"
-            f"- Logical Cores: **{cores_val}**\n\n"
-            "#### 🛠️ Immediate Triaging Runbook:\n"
+            f"**Real-Time Telemetry:** CPU is at **{cpu_val}%** across **{cores_val}** logical cores.\n\n"
+            "#### 🛠️ Triage Runbook:\n"
             "```bash\n"
             "# 1. Isolate top CPU consumers\n"
             "top -b -n 1 -o +%CPU | head -n 15\n\n"
-            "# 2. Trace kernel vs user space time\n"
+            "# 2. Trace system vs user space load\n"
             "mpstat -P ALL 1 3\n"
             "```"
         )
+
+    # 3. Memory / OOM
     elif "memory" in p or "ram" in p or "oom" in p:
+        mem_pct = ctx.get('memory', {}).get('percent', 'N/A')
         return (
             "### 🧠 Memory Saturation & OOM Prevention\n\n"
-            "#### 📋 Diagnostic Commands:\n"
+            f"**Observed State:** System RAM is at **{mem_pct}%**.\n\n"
+            "#### 📋 Triage Commands:\n"
             "```bash\n"
-            "# 1. View memory buffers\n"
-            "free -h -w\n\n"
-            "# 2. Check kernel buffer for OOM killer\n"
+            "free -h -w\n"
             'dmesg -T | grep -E -i "oom|out of memory"\n'
+            "ps aux --sort=-%mem | head -n 10\n"
             "```"
         )
+
+    # 4. S3 & Storage
+    elif "s3" in p or "bucket" in p or "storage" in p:
+        return (
+            "### 🪣 Amazon S3 (Simple Storage Service)\n\n"
+            "Object storage service offering industry-leading scalability, data availability, and security.\n\n"
+            "#### 🛠️ CLI Operations:\n"
+            "```bash\n"
+            "# List all buckets\n"
+            "aws s3 ls\n\n"
+            "# Inspect bucket disk size aggregate\n"
+            "aws s3 ls s3://<bucket-name> --recursive --human-readable --summarize\n"
+            "```"
+        )
+
+    # 5. Default Fallback
     else:
         status_val = ctx.get('health', {}).get('status', 'Optimal')
         score_val = ctx.get('health', {}).get('score', 95)
         return (
             "### 🚀 Infrastructure & DevOps Advisory\n\n"
             f'Analyzed query: **"{prompt}"**\n\n'
-            f"- **Health Status:** {status_val} ({score_val}/100)\n"
-            "- **Services:** Managed daemons healthy."
+            f"- **System Health Score:** {score_val}/100 ({status_val})\n"
+            "- **Telemetry Status:** Connected to live metrics and anomaly evaluator.\n\n"
+            "Try asking about **EC2 troubleshooting**, **high CPU investigation**, **memory leak triage**, or **S3 security**."
         )
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
     live_ctx = get_metrics()
-    context_str = (
-        f"LIVE INFRASTRUCTURE METRICS:\n"
-        f"- CPU: {live_ctx['cpu']['percent']}%\n"
-        f"- Memory: {live_ctx['memory']['percent']}% ({live_ctx['memory']['used_gb']}GB / {live_ctx['memory']['total_gb']}GB)\n"
-        f"- Disk: {live_ctx['disk']['percent']}%\n"
-        f"- System Health Status: {live_ctx['health']['status']} (Score: {live_ctx['health']['score']}/100)\n"
-    )
-    full_prompt = f"{SYSTEM_PROMPT}\n\n{context_str}\n\nUser Question: {request.message}"
 
     try:
-        async with httpx.AsyncClient(timeout=6.0) as client:
+        async with httpx.AsyncClient(timeout=1.5) as client:
             res = await client.post(
                 OLLAMA_URL,
                 json={
                     "model": OLLAMA_MODEL,
-                    "prompt": full_prompt,
+                    "prompt": f"{SYSTEM_PROMPT}\n\nUser Question: {request.message}",
                     "stream": False,
                     "options": {"temperature": 0.2, "num_predict": 250}
                 }
             )
             if res.status_code == 200:
                 ai_text = res.json().get("response", "").strip()
-                return {"reply": ai_text, "source": "ollama", "model": OLLAMA_MODEL}
+                if ai_text:
+                    return {"reply": ai_text, "source": "ollama", "model": OLLAMA_MODEL}
     except Exception:
         pass
 
@@ -681,18 +721,6 @@ async def chat(request: ChatRequest):
         "reply": generate_heuristic_response(request.message, live_ctx),
         "source": "sre-heuristic-engine",
         "model": "rule-based-sre-v2"
-    }
-
-def get_aws_session():
-    region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION") or "eu-north-1"
-    return boto3.Session(region_name=region)
-
-@app.get("/health")
-def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.4.0"
     }
 
 # -----------------------------------------------------------------------------
