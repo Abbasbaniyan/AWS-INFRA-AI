@@ -5,11 +5,8 @@ const state = {
   rawMetrics: null,
   chatHistory: [],
   logs: [],
-  zoomLevel: 1,
-  pan: { x: 0, y: 0 },
-  isDragging: false,
-  dragStart: { x: 0, y: 0 },
-  isSimulatedActive: false // Simulation lock state
+  topology: null,
+  isSimulatedActive: false
 };
 
 // DOM Selectors Cache
@@ -71,36 +68,20 @@ const elements = {
   resourceTableBody: document.getElementById('resourceTableBody')
 };
 
-// -----------------------------------------------------------------------------
-// Direct Global Simulation Trigger
-// -----------------------------------------------------------------------------
-window.triggerSimulation = async function() {
-  try {
-    state.isSimulatedActive = true; // Lock simulation active
-    const res = await fetch('/api/simulate-anomaly', { method: 'POST' });
-    const data = await res.json();
-    if (data.anomalies) {
-      renderAnomalies(data.anomalies);
-    }
-  } catch (err) {
-    console.error("Simulation trigger failed:", err);
-  }
-};
-
 function initLucide() {
   if (window.lucide) {
     window.lucide.createIcons();
   }
 }
 
-// Event Listeners Registration
+// -----------------------------------------------------------------------------
+// Navigation & Event Listeners
+// -----------------------------------------------------------------------------
 function initEventListeners() {
-  // Navigation Handling
   elements.navButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const view = btn.getAttribute('data-view');
       
-      // Anomaly Feed Anchor
       if (view === 'anomalies') {
         switchView('dashboard');
         elements.navButtons.forEach(b => b.classList.remove('active'));
@@ -108,13 +89,10 @@ function initEventListeners() {
         const anomalyCard = document.querySelector('.anomalies-card');
         if (anomalyCard) {
           anomalyCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          anomalyCard.style.outline = '2px solid var(--accent-rose)';
-          setTimeout(() => { anomalyCard.style.outline = 'none'; }, 2000);
         }
         return;
       }
 
-      // Live Logs Anchor
       if (view === 'logs') {
         switchView('dashboard');
         elements.navButtons.forEach(b => b.classList.remove('active'));
@@ -126,7 +104,6 @@ function initEventListeners() {
         return;
       }
 
-      // AWS Resource Categories & Topology
       elements.navButtons.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
 
@@ -147,15 +124,17 @@ function initEventListeners() {
     });
   }
 
-  // Refresh Button
   if (elements.refreshAllBtn) {
     elements.refreshAllBtn.addEventListener('click', () => {
       fetchMetrics();
       fetchAnomalies();
+      fetchTopology();
+      fetchLogs();
+      fetchCloudWatchFleetMetrics();
+      fetchIncidents();
     });
   }
 
-  // AI Assistant Drawer Controls
   if (elements.toggleAiPanelBtn) {
     elements.toggleAiPanelBtn.addEventListener('click', () => {
       elements.aiAssistantPanel.classList.toggle('open');
@@ -168,7 +147,6 @@ function initEventListeners() {
     });
   }
 
-  // AI Chat Input
   if (elements.sendAiChatBtn && elements.aiChatInput) {
     elements.sendAiChatBtn.addEventListener('click', sendAiMessage);
     elements.aiChatInput.addEventListener('keydown', (e) => {
@@ -179,7 +157,6 @@ function initEventListeners() {
     });
   }
 
-  // AI Prompt Chips
   elements.promptChips.forEach(chip => {
     chip.addEventListener('click', () => {
       const prompt = chip.getAttribute('data-prompt');
@@ -191,7 +168,6 @@ function initEventListeners() {
     });
   });
 
-  // Modal Controls
   if (elements.closeNodeModalBtn) {
     elements.closeNodeModalBtn.addEventListener('click', () => {
       elements.nodeModal.classList.remove('open');
@@ -203,7 +179,6 @@ function initEventListeners() {
     });
   }
 
-  // Search Input (Ctrl + K)
   window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
@@ -215,7 +190,6 @@ function initEventListeners() {
     elements.globalSearchInput.addEventListener('input', handleGlobalSearch);
   }
 
-  // Log Controls
   if (elements.logLevelFilter) {
     elements.logLevelFilter.addEventListener('change', renderLogs);
   }
@@ -227,7 +201,6 @@ function initEventListeners() {
   }
 }
 
-// Switch View Layout
 function switchView(viewName) {
   state.activeView = viewName;
   if (viewName === 'dashboard' || viewName === 'topology') {
@@ -240,7 +213,7 @@ function switchView(viewName) {
 }
 
 // -----------------------------------------------------------------------------
-// Update Dashboard UI with Live Metrics
+// Live Metrics Engine
 // -----------------------------------------------------------------------------
 function updateDashboardUI(data) {
   if (!data) return;
@@ -252,152 +225,48 @@ function updateDashboardUI(data) {
   const health = data.health || {};
   const network = data.network || {};
 
-  // ---------------------------------------------------------------------------
-  // Health Score
-  // ---------------------------------------------------------------------------
   const healthScore = Number(health.score ?? 0);
+  if (elements.healthScoreValue) elements.healthScoreValue.textContent = Math.round(healthScore);
+  if (elements.healthStatusText) elements.healthStatusText.textContent = health.status || 'Unknown';
+  if (elements.healthyCount) elements.healthyCount.textContent = health.healthy_components ?? 0;
+  if (elements.warningCount) elements.warningCount.textContent = health.warning_components ?? 0;
+  if (elements.criticalCount) elements.criticalCount.textContent = health.critical_components ?? 0;
 
-  if (elements.healthScoreValue) {
-    elements.healthScoreValue.textContent = Math.round(healthScore);
-  }
-
-  if (elements.healthStatusText) {
-    elements.healthStatusText.textContent =
-      health.status || 'Unknown';
-  }
-
-  if (elements.healthyCount) {
-    elements.healthyCount.textContent =
-      health.healthy_components ?? 0;
-  }
-
-  if (elements.warningCount) {
-    elements.warningCount.textContent =
-      health.warning_components ?? 0;
-  }
-
-  if (elements.criticalCount) {
-    elements.criticalCount.textContent =
-      health.critical_components ?? 0;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Health Progress Ring
-  // ---------------------------------------------------------------------------
   if (elements.healthProgressRing) {
     const radius = 58;
     const circumference = 2 * Math.PI * radius;
-
-    elements.healthProgressRing.style.strokeDasharray =
-      `${circumference}`;
-
-    elements.healthProgressRing.style.strokeDashoffset =
-      `${circumference * (1 - healthScore / 100)}`;
-
-    if (health.color) {
-      elements.healthProgressRing.style.stroke = health.color;
-    }
+    elements.healthProgressRing.style.strokeDasharray = `${circumference}`;
+    elements.healthProgressRing.style.strokeDashoffset = `${circumference * (1 - healthScore / 100)}`;
+    if (health.color) elements.healthProgressRing.style.stroke = health.color;
   }
 
-  // ---------------------------------------------------------------------------
-  // CPU
-  // ---------------------------------------------------------------------------
   const cpuPercent = Number(cpu.percent ?? 0);
+  if (elements.cpuUsage) elements.cpuUsage.textContent = `${cpuPercent.toFixed(1)}%`;
+  if (elements.cpuCores) elements.cpuCores.textContent = `${cpu.cores ?? 0} Cores`;
+  if (elements.cpuProgressBar) elements.cpuProgressBar.style.width = `${Math.min(cpuPercent, 100)}%`;
 
-  if (elements.cpuUsage) {
-    elements.cpuUsage.textContent =
-      `${cpuPercent.toFixed(1)}%`;
-  }
-
-  if (elements.cpuCores) {
-    elements.cpuCores.textContent =
-      `${cpu.cores ?? 0} cores`;
-  }
-
-  if (elements.cpuProgressBar) {
-    elements.cpuProgressBar.style.width =
-      `${Math.min(cpuPercent, 100)}%`;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Memory
-  // ---------------------------------------------------------------------------
   const memoryPercent = Number(memory.percent ?? 0);
+  if (elements.memoryUsage) elements.memoryUsage.textContent = `${memoryPercent.toFixed(1)}%`;
+  if (elements.memoryDetails) elements.memoryDetails.textContent = `${memory.used_gb ?? 0} GB / ${memory.total_gb ?? 0} GB`;
+  if (elements.memProgressBar) elements.memProgressBar.style.width = `${Math.min(memoryPercent, 100)}%`;
 
-  if (elements.memoryUsage) {
-    elements.memoryUsage.textContent =
-      `${memoryPercent.toFixed(1)}%`;
-  }
-
-  if (elements.memoryDetails) {
-    elements.memoryDetails.textContent =
-      `${memory.used_gb ?? 0} GB / ${memory.total_gb ?? 0} GB`;
-  }
-
-  if (elements.memProgressBar) {
-    elements.memProgressBar.style.width =
-      `${Math.min(memoryPercent, 100)}%`;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Disk
-  // ---------------------------------------------------------------------------
   const diskPercent = Number(disk.percent ?? 0);
+  if (elements.diskUsage) elements.diskUsage.textContent = `${diskPercent.toFixed(1)}%`;
+  if (elements.diskDetails) elements.diskDetails.textContent = `${disk.used_gb ?? 0} GB / ${disk.total_gb ?? 0} GB`;
+  if (elements.diskProgressBar) elements.diskProgressBar.style.width = `${Math.min(diskPercent, 100)}%`;
 
-  if (elements.diskUsage) {
-    elements.diskUsage.textContent =
-      `${diskPercent.toFixed(1)}%`;
-  }
+  if (elements.networkRate) elements.networkRate.textContent = `${Number(network.kb_sent_sec ?? 0).toFixed(1)} KB/s`;
+  if (elements.networkTotals) elements.networkTotals.textContent = `↑ ${Number(network.total_sent_mb ?? 0).toFixed(2)} MB  |  ↓ ${Number(network.total_recv_mb ?? 0).toFixed(2)} MB`;
+  if (elements.systemUptime) elements.systemUptime.textContent = uptime.formatted || '0h 0m 0s';
 
-  if (elements.diskDetails) {
-    elements.diskDetails.textContent =
-      `${disk.used_gb ?? 0} GB / ${disk.total_gb ?? 0} GB`;
-  }
-
-  if (elements.diskProgressBar) {
-    elements.diskProgressBar.style.width =
-      `${Math.min(diskPercent, 100)}%`;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Network
-  // ---------------------------------------------------------------------------
-  if (elements.networkRate) {
-    elements.networkRate.textContent =
-      `${Number(network.kb_sent_sec ?? 0).toFixed(1)} KB/s`;
-  }
-
-  if (elements.networkTotals) {
-    elements.networkTotals.textContent =
-      `↑ ${Number(network.total_sent_mb ?? 0).toFixed(2)} MB  |  ↓ ${Number(network.total_recv_mb ?? 0).toFixed(2)} MB`;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Uptime
-  // ---------------------------------------------------------------------------
-  if (elements.systemUptime) {
-    elements.systemUptime.textContent =
-      uptime.formatted || '0h 0m 0s';
-  }
-
-  // ---------------------------------------------------------------------------
-  // Top Processes
-  // ---------------------------------------------------------------------------
-  if (Array.isArray(data.top_processes)) {
-    renderProcesses(data.top_processes);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Store current metrics
-  // ---------------------------------------------------------------------------
+  if (Array.isArray(data.top_processes)) renderProcesses(data.top_processes);
   state.metrics = data;
 }
 
-// Fetch Metrics from FastAPI Backend
 async function fetchMetrics() {
   try {
     const res = await fetch('/metrics');
-    if (!res.ok) throw new Error('Network error fetching metrics');
+    if (!res.ok) return;
     const data = await res.json();
     state.rawMetrics = data;
     updateDashboardUI(data);
@@ -406,74 +275,54 @@ async function fetchMetrics() {
   }
 }
 
-// Separate Anomalies Poller to prevent DOM collision
+// -----------------------------------------------------------------------------
+// Anomaly Engine & Auto-Remediation
+// -----------------------------------------------------------------------------
 async function fetchAnomalies() {
   try {
     const res = await fetch('/api/anomalies');
     if (!res.ok) return;
     const data = await res.json();
-    
-    // If backend returns anomalies, always render them
-    if (data.anomalies && data.anomalies.length > 0) {
-      renderAnomalies(data.anomalies);
-    } else {
-      // If simulation is locked or cards are visible, do not wipe
-      if (state.isSimulatedActive) return;
-      const listEl = document.getElementById('anomaliesList');
-      if (listEl && listEl.querySelectorAll('.anomaly-item').length > 0) {
-        return;
-      }
-      renderAnomalies([]);
-    }
+    renderAnomalies(data.anomalies || []);
   } catch (err) {
     console.error('Error fetching anomalies:', err);
   }
 }
 
-// Global memory state for active anomalies
-let currentActiveAnomalies = [];
-
-// -----------------------------------------------------------------------------
-// Direct Global Simulation Trigger
-// -----------------------------------------------------------------------------
 window.triggerSimulation = async function() {
   try {
+    state.isSimulatedActive = true;
     const res = await fetch('/api/simulate-anomaly', { method: 'POST' });
     const data = await res.json();
-    if (data.anomalies && data.anomalies.length > 0) {
-      currentActiveAnomalies = data.anomalies;
-      renderAnomalies(currentActiveAnomalies);
+    if (data.anomalies) {
+      renderAnomalies(data.anomalies);
     }
   } catch (err) {
     console.error("Simulation trigger failed:", err);
   }
 };
 
-// Separate Anomalies Poller
-async function fetchAnomalies() {
-  // IF simulated anomalies are already active on screen, DO NOT overwrite or clear them!
-  if (currentActiveAnomalies.length > 0) {
-    renderAnomalies(currentActiveAnomalies);
-    return;
-  }
-
+window.triggerRemediation = async function(anomalyId, actionType, target) {
   try {
-    const res = await fetch('/api/anomalies');
-    if (!res.ok) return;
-    const data = await res.json();
-    
-    if (data.anomalies && data.anomalies.length > 0) {
-      currentActiveAnomalies = data.anomalies;
-      renderAnomalies(currentActiveAnomalies);
-    } else {
-      renderAnomalies([]);
-    }
+    state.isSimulatedActive = false;
+    await fetch('/api/remediate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anomaly_id: anomalyId,
+        action_type: actionType,
+        target: target
+      })
+    });
+    fetchIncidents();
+    fetchAnomalies();
+    fetchLogs();
+    fetchMetrics();
   } catch (err) {
-    console.error('Error fetching anomalies:', err);
+    console.error('Remediation error:', err);
   }
-}
+};
 
-// Render Anomalies Feed
 function renderAnomalies(anomalies) {
   if (!elements.anomaliesList) return;
   
@@ -486,7 +335,7 @@ function renderAnomalies(anomalies) {
         <i data-lucide="check-circle" class="empty-icon text-emerald" style="width: 32px; height: 32px; margin-bottom: 8px;"></i>
         <p style="color: var(--text-muted); font-size: 0.82rem;">All monitored thresholds are within standard parameters.</p>
       </div>`;
-    if (typeof initLucide === 'function') initLucide();
+    initLucide();
     return;
   }
 
@@ -522,35 +371,12 @@ function renderAnomalies(anomalies) {
     `;
     elements.anomaliesList.appendChild(item);
   });
-
-  if (typeof initLucide === 'function') initLucide();
+  initLucide();
 }
 
-// Auto-Remediation Trigger
-window.triggerRemediation = async function(anomalyId, actionType, target) {
-  try {
-    // Clear the active in-memory anomaly list so it returns to empty state
-    currentActiveAnomalies = [];
-    
-    const res = await fetch('/api/remediate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        anomaly_id: anomalyId,
-        action_type: actionType,
-        target: target
-      })
-    });
-    const data = await res.json();
-    fetchIncidents();
-    renderAnomalies([]);
-    if (typeof fetchMetrics === 'function') fetchMetrics();
-  } catch (err) {
-    console.error('Remediation error:', err);
-  }
-};
-
-// Render Processes Table
+// -----------------------------------------------------------------------------
+// Top Processes Table
+// -----------------------------------------------------------------------------
 function renderProcesses(processes) {
   if (!elements.topProcessTableBody) return;
   elements.topProcessTableBody.innerHTML = '';
@@ -569,34 +395,48 @@ function renderProcesses(processes) {
   });
 }
 
-// Render Topology Graph
+// -----------------------------------------------------------------------------
+// Infrastructure Topology Map
+// -----------------------------------------------------------------------------
+async function fetchTopology() {
+  try {
+    const res = await fetch('/api/topology');
+    if (!res.ok) return;
+    const data = await res.json();
+    state.topology = data;
+    renderTopology(data);
+  } catch (err) {
+    console.error('Topology fetch error:', err);
+  }
+}
+
 function renderTopology(topology) {
   const svg = elements.topologySvg;
-  if (!svg || svg.children.length > 0) return;
+  if (!svg || !topology) return;
 
   const width = svg.clientWidth || 600;
   const height = 320;
   const nodes = topology.nodes || [];
   const links = topology.links || [];
 
+  // Ensure explicit spaces between viewBox values
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-
   let svgHtml = '<g id="topology-graph-root">';
 
   links.forEach(l => {
     const sourceNode = nodes.find(n => n.id === l.source);
     const targetNode = nodes.find(n => n.id === l.target);
     if (sourceNode && targetNode) {
-      svgHtml += `<line x1="${sourceNode.x}" y1="${sourceNode.y}" x2="${targetNode.x}" y2="${targetNode.y}" stroke="rgba(255,255,255,0.15)" stroke-width="2" stroke-dasharray="4"/>`;
+      svgHtml += `<line x1="${sourceNode.x}" y1="${sourceNode.y}" x2="${targetNode.x}" y2="${targetNode.y}" stroke="rgba(255,255,255,0.2)" stroke-width="2" stroke-dasharray="4"/>`;
     }
   });
 
   nodes.forEach(n => {
     svgHtml += `
       <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectNode('${n.id}')">
-        <circle r="22" fill="#0e1526" stroke="${n.status === 'healthy' ? '#10b981' : '#f59e0b'}" stroke-width="2.5"/>
-        <text text-anchor="middle" y="34" fill="#94a3b8" font-size="11" font-weight="600">${n.label}</text>
-        <circle r="6" fill="${n.status === 'healthy' ? '#10b981' : '#f59e0b'}" cx="14" cy="-14"/>
+        <circle r="20" fill="#0e1526" stroke="#38bdf8" stroke-width="2.5"/>
+        <text text-anchor="middle" y="32" fill="#94a3b8" font-size="10" font-weight="600">${n.label}</text>
+        <circle r="5" fill="#10b981" cx="12" cy="-12"/>
       </g>
     `;
   });
@@ -605,10 +445,9 @@ function renderTopology(topology) {
   svg.innerHTML = svgHtml;
 }
 
-// Inspect Node Modal
 window.inspectNode = function(nodeId) {
-  if (!state.rawMetrics || !state.rawMetrics.topology) return;
-  const node = state.rawMetrics.topology.nodes.find(n => n.id === nodeId);
+  if (!state.topology) return;
+  const node = state.topology.nodes.find(n => n.id === nodeId);
   if (!node) return;
 
   elements.modalNodeTitle.textContent = `${node.label} (${node.id})`;
@@ -616,22 +455,37 @@ window.inspectNode = function(nodeId) {
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div><strong>Status:</strong> <span class="health-pill ${node.status}">${node.status.toUpperCase()}</span></div>
       <div><strong>Type:</strong> <code>${node.type || 'AWS Core Infrastructure'}</code></div>
-      <div><strong>Region:</strong> <code>${node.region || 'us-east-1'}</code></div>
-      <div><strong>Details:</strong> ${node.details || 'Operational state normal with automated failover routing.'}</div>
+      <div><strong>Region:</strong> <code>${node.region || 'eu-north-1'}</code></div>
+      <div><strong>Details:</strong> ${node.details || 'Operational state normal.'}</div>
     </div>
   `;
 
   if (elements.modalAiDiagnoseBtn) {
     elements.modalAiDiagnoseBtn.onclick = () => {
       elements.nodeModal.classList.remove('open');
-      triggerAiDiagnosis(`Inspect and diagnose AWS resource: ${node.label} (${node.id})`);
+      sendPromptToAi(`Explain and diagnose AWS resource: ${node.label} (${node.id})`);
     };
   }
 
   elements.nodeModal.classList.add('open');
 };
 
-// Render Console Logs
+// -----------------------------------------------------------------------------
+// Live Log Stream
+// -----------------------------------------------------------------------------
+async function fetchLogs() {
+  try {
+    const filter = elements.logLevelFilter ? elements.logLevelFilter.value : 'ALL';
+    const res = await fetch(`/api/logs?level=${filter}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    state.logs = data.logs || [];
+    renderLogs();
+  } catch (err) {
+    console.error('Logs fetch error:', err);
+  }
+}
+
 function renderLogs() {
   const filter = elements.logLevelFilter ? elements.logLevelFilter.value : 'ALL';
   if (!elements.dashboardLogBox) return;
@@ -653,7 +507,9 @@ function renderLogs() {
   elements.dashboardLogBox.scrollTop = elements.dashboardLogBox.scrollHeight;
 }
 
-// Render Resource Tables (EC2, VPC, S3, IAM, Services)
+// -----------------------------------------------------------------------------
+// AWS Resource Catalog Tables (EC2, VPC, S3, IAM, Services)
+// -----------------------------------------------------------------------------
 async function renderResourceTable(type) {
   switchView(type);
   elements.resourceViewTitle.textContent = `${type.toUpperCase()} Resources`;
@@ -674,7 +530,7 @@ async function renderResourceTable(type) {
     const res = await fetch(`/resources/${type}`);
     const data = await res.json();
     const items = data.items || [];
-    elements.resourceCountDisplay.textContent = `Showing ${items.length} items`;
+    elements.resourceCountDisplay.textContent = `Showing ${items.length} items (${data.source || 'inventory'})`;
     elements.resourceTableBody.innerHTML = '';
 
     items.forEach(item => {
@@ -685,7 +541,7 @@ async function renderResourceTable(type) {
         <td><span class="health-pill healthy">${item.status || 'Active'}</span></td>
         <td>${JSON.stringify(item.details || {})}</td>
         <td>
-          <button class="action-btn" style="padding:4px 8px;font-size:0.75rem;" onclick="triggerAiDiagnosis('Audit resource ${item.id || item.name}')">
+          <button class="action-btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendPromptToAi('Audit resource ${item.id || item.name}')">
             Audit
           </button>
         </td>
@@ -697,7 +553,9 @@ async function renderResourceTable(type) {
   }
 }
 
-// Send AI Message Function
+// -----------------------------------------------------------------------------
+// AI SRE Assistant
+// -----------------------------------------------------------------------------
 async function sendAiMessage() {
   const text = elements.aiChatInput.value.trim();
   if (!text) return;
@@ -737,7 +595,6 @@ async function sendAiMessage() {
   }
 }
 
-// Helpers for Chat UI
 function appendChatMessage(role, content) {
   const msgDiv = document.createElement('div');
   msgDiv.className = `chat-message ${role}`;
@@ -774,20 +631,16 @@ function removeMessageById(id) {
   if (el) el.remove();
 }
 
-// Trigger AI Diagnosis from UI
-window.triggerAiDiagnosis = function(query) {
-  elements.aiAssistantPanel.classList.add('open');
-  elements.aiChatInput.value = query;
-  sendAiMessage();
-};
-
 window.sendPromptToAi = function(promptText) {
-  elements.aiAssistantPanel.classList.add('open');
-  elements.aiChatInput.value = promptText;
+  if (elements.aiAssistantPanel) {
+    elements.aiAssistantPanel.classList.add('open');
+  }
+  if (elements.aiChatInput) {
+    elements.aiChatInput.value = promptText;
+  }
   sendAiMessage();
 };
 
-// Global Command Search
 function handleGlobalSearch(e) {
   const q = e.target.value.toLowerCase().trim();
   const dropdown = elements.searchResultsDropdown;
@@ -800,14 +653,13 @@ function handleGlobalSearch(e) {
 
   dropdown.style.display = 'flex';
   dropdown.innerHTML = `
-    <div class="search-res-item" onclick="triggerAiDiagnosis('Audit search target: ${q}')">
+    <div class="search-res-item" onclick="sendPromptToAi('Audit search target: ${q}')">
       <span>🔍 Search AWS Infra for "<strong>${q}</strong>"</span>
       <span class="anomaly-resource-tag">Action</span>
     </div>
   `;
 }
 
-// Markdown Formatter
 function formatMarkdown(text) {
   if (!text) return '';
   return text
@@ -824,7 +676,7 @@ function formatMarkdown(text) {
 }
 
 // -----------------------------------------------------------------------------
-// CloudWatch Live Fleet Telemetry Poller & Canvas Renderer
+// CloudWatch Fleet Metrics
 // -----------------------------------------------------------------------------
 async function fetchCloudWatchFleetMetrics() {
   try {
@@ -883,29 +735,8 @@ async function fetchCloudWatchFleetMetrics() {
 }
 
 // -----------------------------------------------------------------------------
-// Auto-Remediation Trigger & Incident Timeline Poller
+// Incident Audit Timeline
 // -----------------------------------------------------------------------------
-window.triggerRemediation = async function(anomalyId, actionType, target) {
-  try {
-    state.isSimulatedActive = false; // Reset lock on remediation
-    const res = await fetch('/api/remediate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        anomaly_id: anomalyId,
-        action_type: actionType,
-        target: target
-      })
-    });
-    const data = await res.json();
-    fetchIncidents();
-    fetchAnomalies();
-    if (typeof fetchMetrics === 'function') fetchMetrics();
-  } catch (err) {
-    console.error('Remediation error:', err);
-  }
-};
-
 async function fetchIncidents() {
   try {
     const res = await fetch('/api/incidents');
@@ -941,7 +772,7 @@ async function fetchIncidents() {
 }
 
 // -----------------------------------------------------------------------------
-// App Initialization & Timers
+// Application Initialization
 // -----------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
@@ -949,55 +780,13 @@ document.addEventListener('DOMContentLoaded', () => {
   
   fetchMetrics();
   fetchAnomalies();
+  fetchTopology();
+  fetchLogs();
   fetchCloudWatchFleetMetrics();
   fetchIncidents();
 
   setInterval(fetchMetrics, 3000);
   setInterval(fetchAnomalies, 4000);
+  setInterval(fetchLogs, 5000);
   setInterval(fetchCloudWatchFleetMetrics, 30000);
-  // Persistent Simulated Alert State
-  let simulationActive = false;
-
-  const simBtn = document.getElementById('simulateAnomalyBtn');
-  if (simBtn) {
-    simBtn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      simulationActive = true;
-
-      try {
-        const res = await fetch('/api/simulate-anomaly', { method: 'POST' });
-        const data = await res.json();
-        if (data.anomalies) {
-          renderAnomalies(data.anomalies);
-        }
-      } catch (err) {
-        console.error('Simulation error:', err);
-      }
-    });
-  }
-
-  // Update fetchAnomalies to respect active simulation
-  window.fetchAnomalies = async function() {
-    if (simulationActive) return; // Prevent overwriting while simulated alert is active
-
-    try {
-      const res = await fetch('/api/anomalies');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.anomalies) {
-        renderAnomalies(data.anomalies);
-      }
-    } catch (err) {
-      console.error('Fetch anomalies error:', err);
-    }
-  };
-
-  // Reset simulation state upon remediation
-  const originalRemediate = window.triggerRemediation;
-  window.triggerRemediation = async function(anomalyId, actionType, target) {
-    simulationActive = false;
-    if (typeof originalRemediate === 'function') {
-      await originalRemediate(anomalyId, actionType, target);
-    }
-  };
 });
