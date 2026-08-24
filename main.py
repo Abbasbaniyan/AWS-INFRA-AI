@@ -19,7 +19,13 @@ from dotenv import load_dotenv
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import httpx
-from groq import Groq
+
+# Safe Groq Import
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
 
 # Load environment variables
 load_dotenv()
@@ -39,7 +45,7 @@ app.add_middleware(
 )
 
 START_TIME = time.time()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 
 # Runtime In-Memory Storage
 system_logs = []
@@ -647,7 +653,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
     logs = log_data.get("logs", [])
     analysis = analyze_infra_state(ctx, ec2_items, anomalies, logs)
     
-    # 1. EC2 Explanations (Beginner & Technical)
+    # 1. EC2 Explanations
     if "ec2" in p or "instance" in p or "server" in p:
         if mode == "beginner" or "simple" in p or "new to aws" in p:
             return (
@@ -725,7 +731,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "```"
         )
 
-    # 5. Health & RCA / "What's wrong"
+    # 5. Health & RCA
     if "health" in p or "what's wrong" in p or "why is my infrastructure" in p or "analyze" in p:
         if not analysis['issues']:
             return (
@@ -753,7 +759,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "```"
         )
 
-    # 6. Prioritization / "What should I fix first"
+    # 6. Prioritization / What to fix
     if "fix" in p or "priorit" in p or "action" in p:
         if not analysis['issues']:
             return "### ✅ No Action Required: Infrastructure is running within optimal operating limits."
@@ -764,7 +770,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
         res += "#### 🛠️ Recommended Sequence: Resolve P1 items first to eliminate immediate latency spikes."
         return res
 
-    # 7. Architecture Overview
+    # 7. Architecture
     if "architecture" in p or "topology" in p:
         return (
             "### 🏗️ Live Infrastructure Architecture Overview\n\n"
@@ -831,8 +837,8 @@ Guidelines:
 3. If asked about current health, bottlenecks, or what to fix first, reference their actual live metrics and anomalies directly.
 4. Keep formatting clean, bold, scannable, and actionable."""
 
-    # 2. Query Groq LLM if API Key is configured
-    if GROQ_API_KEY:
+    # 2. Query Groq LLM if package is available and API Key is configured
+    if GROQ_AVAILABLE and GROQ_API_KEY:
         try:
             client = Groq(api_key=GROQ_API_KEY)
             chat_completion = client.chat.completions.create(

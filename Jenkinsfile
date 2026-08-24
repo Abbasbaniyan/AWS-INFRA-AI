@@ -31,7 +31,7 @@ pipeline {
             steps {
                 sh '''
                     export DOCKER_BUILDKIT=0
-                    docker build --network=host -t ${IMAGE_NAME}:${BUILD_NUMBER} -t ${IMAGE_NAME}:latest .
+                    docker build --no-cache --network=host -t ${IMAGE_NAME}:${BUILD_NUMBER} -t ${IMAGE_NAME}:latest .
                 '''
             }
         }
