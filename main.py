@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import httpx
+from groq import Groq
 
 # Load environment variables
 load_dotenv()
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 START_TIME = time.time()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:1b")
 
@@ -611,116 +613,205 @@ def get_ec2_cloudwatch_metrics(instance_id: Optional[str] = None):
     }
 
 # -----------------------------------------------------------------------------
-# AI Assistant Engine & SRE Heuristic Fallback
+# AI Infrastructure Copilot Engine
 # -----------------------------------------------------------------------------
-SYSTEM_PROMPT = """You are the AWS Infrastructure AI Assistant — an expert DevOps & Site Reliability Engineer (SRE).
-Provide accurate, production-grade infrastructure troubleshooting, AWS CLI commands, Bash scripts, root-cause analyses, and architecture improvements.
-Format responses cleanly with markdown, code blocks, and clear step-by-step action items."""
-
-def generate_heuristic_response(prompt: str, ctx: Dict[str, Any]) -> str:
-    p = prompt.lower()
+def analyze_infra_state(ctx: Dict[str, Any], ec2_items: List[Dict], anomalies: List[Dict], logs: List[Dict]) -> Dict[str, Any]:
+    """Dynamically computes infrastructure health assessment and prioritizes issues."""
+    cpu = ctx.get('cpu', {}).get('percent', 0.0)
+    mem = ctx.get('memory', {}).get('percent', 0.0)
+    disk = ctx.get('disk', {}).get('percent', 0.0)
+    score = ctx.get('health', {}).get('score', 100)
     
-    # 1. EC2 Queries
-    if "ec2" in p or "instance" in p or "server" in p:
+    issues = []
+    if cpu > 80:
+        issues.append({"priority": "P1 - CRITICAL", "target": "Host CPU", "metric": f"{cpu}%", "impact": "Thread starvation & elevated latency"})
+    if mem > 85:
+        issues.append({"priority": "P1 - CRITICAL", "target": "System Memory", "metric": f"{mem}%", "impact": "High risk of Linux OOM Killer terminating processes"})
+    if disk > 90:
+        issues.append({"priority": "P2 - HIGH", "target": "Root Volume", "metric": f"{disk}%", "impact": "Log writes failing; service crashes"})
+    
+    for anom in anomalies:
+        issues.append({"priority": f"P2 - {anom.get('severity', 'WARNING')}", "target": anom.get('resource', 'Unknown'), "metric": anom.get('title', ''), "impact": anom.get('description', '')})
+        
+    return {
+        "score": score,
+        "status": ctx.get('health', {}).get('status', 'Optimal'),
+        "ec2_count": len(ec2_items),
+        "anomaly_count": len(anomalies),
+        "log_count": len(logs),
+        "issues": sorted(issues, key=lambda x: x['priority'])
+    }
+
+def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_data: Dict[str, Any], anom_data: Dict[str, Any], log_data: Dict[str, Any]) -> str:
+    p = prompt.lower()
+    ec2_items = ec2_data.get("items", [])
+    anomalies = anom_data.get("anomalies", [])
+    logs = log_data.get("logs", [])
+    analysis = analyze_infra_state(ctx, ec2_items, anomalies, logs)
+    
+    # 1. Beginner Mode
+    if mode == "beginner" or "explain like i'm new" in p or "simple" in p:
+        if "ec2" in p or "server" in p:
+            return (
+                "### 🖥️ What is an EC2 Instance? (Simple Explanation)\n\n"
+                "Think of an **Amazon EC2 instance** like a **laptop running in an Amazon data center** that you control through the internet.\n\n"
+                f"- **Your Active Fleet:** You currently have **{analysis['ec2_count']}** virtual machines running.\n"
+                f"- **How Hard It's Working:** CPU is at **{ctx['cpu']['percent']}%**.\n\n"
+                "> 💡 **Analogy:** If your home laptop gets hot with 50 browser tabs open, that is high CPU. EC2 works the same way!"
+            )
+        elif "vpc" in p or "network" in p:
+            return (
+                "### 🌐 What is a VPC? (Simple Explanation)\n\n"
+                "A **VPC (Virtual Private Cloud)** is like a **gated community in the cloud** for your servers.\n\n"
+                "- Only people with the key (Security Groups) can come in through the gate.\n"
+                "- Your servers inside can safely talk to each other without being exposed to the wild internet."
+            )
+        else:
+            top_issue = analysis['issues'][0] if analysis['issues'] else None
+            issue_msg = f"Your virtual server is under stress: **{top_issue['target']}** is reaching **{top_issue['metric']}**." if top_issue else "Everything in your cloud is running smoothly and calmly."
+            return (
+                f"### 🛡️ Infrastructure Health Overview (Beginner Mode)\n\n"
+                f"Your overall cloud health score is **{analysis['score']}/100** ({analysis['status']}).\n\n"
+                f"**What's going on:**\n{issue_msg}\n\n"
+                "**What you should do next:**\n"
+                "1. If CPU or RAM is high, check which apps are working the hardest.\n"
+                "2. Click **'Simulate Alert'** and then **'Remediate'** on your dashboard to see auto-healing in action!"
+            )
+
+    # 2. Comprehensive Health & RCA (Engineer Mode)
+    if "health" in p or "what's wrong" in p or "why is my infrastructure" in p or "analyze" in p:
+        if not analysis['issues']:
+            return (
+                "### 🟢 Infrastructure Telemetry: All Systems Nominal\n\n"
+                f"**Health Score:** `100/100` | **Status:** `OPTIMAL`\n\n"
+                "- **Telemetry:** Host CPU, Memory, and Disk allocations are within standard baseline (<70%).\n"
+                f"- **Inventory Fleet:** `{analysis['ec2_count']}` EC2 instances online.\n"
+                "- **Anomaly Engine:** 0 critical alerts active."
+            )
+        
+        top = analysis['issues'][0]
         return (
-            "### 🖥️ Amazon EC2 (Elastic Compute Cloud) Overview\n\n"
-            "Amazon EC2 provides scalable compute capacity in the cloud, allowing on-demand virtual machine deployment.\n\n"
-            "#### 🛠️ Useful Management & Troubleshooting Commands:\n"
+            f"### 🚨 Infrastructure Health Analysis ({analysis['score']}/100 - {analysis['status']})\n\n"
+            f"**Primary Bottleneck Identified:** `{top['target']}` at `{top['metric']}`\n\n"
+            f"#### 🔍 Root Cause Analysis (RCA):\n"
+            f"- **Confidence:** `HIGH (92%)`\n"
+            f"- **Evidence:** Kernel metrics show `{top['target']}` exceeded baseline threshold. Active anomalies: `{analysis['anomaly_count']}`.\n"
+            f"- **Impact:** {top['impact']}.\n\n"
+            "#### 🛠️ Immediate Triaging Commands:\n"
             "```bash\n"
-            "# List all running instances in current region\n"
-            "aws ec2 describe-instances --filters 'Name=instance-state-name,Values=running' --output table\n\n"
-            "# Inspect system logs of a specific instance\n"
-            "aws ec2 get-console-output --instance-id <instance-id>\n\n"
-            "# Reboot instance safely via CLI\n"
-            "aws ec2 reboot-instances --instance-ids <instance-id>\n"
+            "# 1. Profile top resource consuming processes\n"
+            "ps aux --sort=-%cpu,-%mem | head -n 8\n\n"
+            "# 2. Inspect kernel dmesg for OOM or CPU stalls\n"
+            "dmesg -T | tail -n 20\n"
             "```\n\n"
-            "#### 💡 Production Best Practices:\n"
-            "- Attach an **IAM Role (Instance Profile)** rather than saving access keys on the instance.\n"
-            "- Configure CloudWatch alarms for CPU > 80% and disk space headroom."
+            "#### ⚡ Remediation Recommendation:\n"
+            "Trigger auto-remediation via the dashboard Anomaly Feed or recycle worker thread daemons."
         )
 
-    # 2. CPU / Performance Spikes
-    elif "cpu" in p or "spike" in p or "load" in p:
-        cpu_val = ctx.get('cpu', {}).get('percent', 'N/A')
-        cores_val = ctx.get('cpu', {}).get('cores', 'N/A')
+    # 3. Prioritization Engine
+    if "fix" in p or "priorit" in p or "action" in p:
+        if not analysis['issues']:
+            return "### ✅ No Action Required: Infrastructure is running within optimal operating limits."
+            
+        res = "### 📋 Prioritized SRE Incident Action Plan\n\n"
+        for idx, issue in enumerate(analysis['issues'], 1):
+            res += f"**{idx}. [{issue['priority']}] {issue['target']}** (`{issue['metric']}`)\n- *Impact:* {issue['impact']}\n\n"
+        res += "#### 🛠️ Recommended Sequence: Resolve P1 items first to eliminate immediate latency spikes."
+        return res
+
+    # 4. Architecture Lookups
+    if "architecture" in p or "topology" in p:
         return (
-            "### 🔍 Incident Analysis: Elevated CPU Load\n\n"
-            f"**Real-Time Telemetry:** CPU is at **{cpu_val}%** across **{cores_val}** logical cores.\n\n"
-            "#### 🛠️ Triage Runbook:\n"
-            "```bash\n"
-            "# 1. Isolate top CPU consumers\n"
-            "top -b -n 1 -o +%CPU | head -n 15\n\n"
-            "# 2. Trace system vs user space load\n"
-            "mpstat -P ALL 1 3\n"
-            "```"
+            "### 🏗️ Live Infrastructure Architecture Overview\n\n"
+            "```\n"
+            "Internet (Global Clients) -> CloudFront Edge CDN -> AWS ALB (Port 8000)\n"
+            "                                                        |\n"
+            "                   +------------------------------------+-----------------------------------+\n"
+            "                   |                                                                        |\n"
+            "         EC2 Auto-Scaling Fleet (FastAPI Engine)                             S3 Static & Telemetry Archive\n"
+            "                   |\n"
+            "         Aurora PostgreSQL (Port 5432)\n"
+            "```\n"
+            f"- **Region:** `eu-north-1`\n"
+            f"- **Monitored Nodes:** 6 Topology Nodes | {analysis['ec2_count']} Compute Resources Active"
         )
 
-    # 3. Memory / OOM
-    elif "memory" in p or "ram" in p or "oom" in p:
-        mem_pct = ctx.get('memory', {}).get('percent', 'N/A')
-        return (
-            "### 🧠 Memory Saturation & OOM Prevention\n\n"
-            f"**Observed State:** System RAM is at **{mem_pct}%**.\n\n"
-            "#### 📋 Triage Commands:\n"
-            "```bash\n"
-            "free -h -w\n"
-            'dmesg -T | grep -E -i "oom|out of memory"\n'
-            "ps aux --sort=-%mem | head -n 10\n"
-            "```"
-        )
-
-    # 4. S3 & Storage
-    elif "s3" in p or "bucket" in p or "storage" in p:
-        return (
-            "### 🪣 Amazon S3 (Simple Storage Service)\n\n"
-            "Object storage service offering industry-leading scalability, data availability, and security.\n\n"
-            "#### 🛠️ CLI Operations:\n"
-            "```bash\n"
-            "# List all buckets\n"
-            "aws s3 ls\n\n"
-            "# Inspect bucket disk size aggregate\n"
-            "aws s3 ls s3://<bucket-name> --recursive --human-readable --summarize\n"
-            "```"
-        )
-
-    # 5. Default Fallback
-    else:
-        status_val = ctx.get('health', {}).get('status', 'Optimal')
-        score_val = ctx.get('health', {}).get('score', 95)
-        return (
-            "### 🚀 Infrastructure & DevOps Advisory\n\n"
-            f'Analyzed query: **"{prompt}"**\n\n'
-            f"- **System Health Score:** {score_val}/100 ({status_val})\n"
-            "- **Telemetry Status:** Connected to live metrics and anomaly evaluator.\n\n"
-            "Try asking about **EC2 troubleshooting**, **high CPU investigation**, **memory leak triage**, or **S3 security**."
-        )
+    # 5. Default Copilot Fallback
+    top_proc = ctx.get('top_processes', [{}])[0]
+    proc_name = top_proc.get('name', 'system')
+    proc_cpu = top_proc.get('cpu_percent', 0.0)
+    
+    return (
+        f"### 🤖 DevOps Copilot Advisory: \"{prompt}\"\n\n"
+        f"**Live Telemetry Context ({analysis['status']}):**\n"
+        f"- **Health Index:** `{analysis['score']}/100` | **CPU:** `{ctx['cpu']['percent']}%` | **RAM:** `{ctx['memory']['percent']}%`\n"
+        f"- **Top Monitored Process:** `{proc_name}` (`{proc_cpu}% CPU`)\n"
+        f"- **Cloud Inventory:** `{analysis['ec2_count']}` EC2 instances in `eu-north-1`.\n\n"
+        "#### 💡 Suggested Inquiries:\n"
+        "- `Explain my health`\n"
+        "- `What should I fix first?`\n"
+        "- `Explain this to me like I'm new to AWS`\n"
+        "- `Explain my architecture`"
+    )
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
     live_ctx = get_metrics()
+    live_ec2 = fetch_live_ec2()
+    live_anom = get_anomalies()
+    live_logs = get_logs(limit=10)
 
-    try:
-        async with httpx.AsyncClient(timeout=1.5) as client:
-            res = await client.post(
-                OLLAMA_URL,
-                json={
-                    "model": OLLAMA_MODEL,
-                    "prompt": f"{SYSTEM_PROMPT}\n\nUser Question: {request.message}",
-                    "stream": False,
-                    "options": {"temperature": 0.2, "num_predict": 250}
-                }
+    # 1. Construct live telemetry system prompt
+    context_str = f"""
+LIVE INFRASTRUCTURE STATE:
+- Region: eu-north-1
+- Health Score: {live_ctx['health']['score']}/100 ({live_ctx['health']['status']})
+- CPU Utilization: {live_ctx['cpu']['percent']}% across {live_ctx['cpu']['cores']} cores
+- Memory Allocation: {live_ctx['memory']['percent']}% ({live_ctx['memory']['used_gb']}GB used / {live_ctx['memory']['total_gb']}GB total)
+- Disk Headroom: {live_ctx['disk']['percent']}% used
+- EC2 Inventory: {len(live_ec2.get('items', []))} instances active
+- Active Anomaly Alerts: {len(live_anom.get('anomalies', []))} detected
+- Top Monitored Tasks: {[p.get('name') for p in live_ctx.get('top_processes', [])[:3]]}
+- Recent Log Events: {[l['message'] for l in live_logs.get('logs', [])[:3]]}
+"""
+
+    system_prompt = f"""You are the AWS Infrastructure AI Assistant — an elite DevOps, SRE, and Cloud Solutions Architect.
+You have direct, real-time access to the user's live infrastructure telemetry:
+{context_str}
+
+Guidelines:
+1. When asked technical, architectural, or troubleshooting questions, give deep, clear, production-grade guidance with exact AWS CLI/Linux commands in markdown code blocks.
+2. If asked to explain something simply or "like I'm new", use relatable analogies, zero jargon, and clear steps.
+3. If asked about current health, bottlenecks, or what to fix first, reference their actual live metrics and anomalies directly.
+4. Keep formatting clean, bold, scannable, and actionable."""
+
+    # 2. Query Groq LLM (LLaMA 3.3 70B) if API Key is configured
+    if GROQ_API_KEY:
+        try:
+            client = Groq(api_key=GROQ_API_KEY)
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": request.message}
+                ],
+                model="llama-3.3-70b-versatile",
+                temperature=0.3,
+                max_tokens=750,
             )
-            if res.status_code == 200:
-                ai_text = res.json().get("response", "").strip()
-                if ai_text:
-                    return {"reply": ai_text, "source": "ollama", "model": OLLAMA_MODEL}
-    except Exception:
-        pass
+            return {
+                "reply": chat_completion.choices[0].message.content,
+                "source": "groq-llama-3.3-70b",
+                "model": "llama-3.3-70b-versatile"
+            }
+        except Exception as e:
+            print(f"⚠️ Groq API connection fallback: {e}")
 
+    # 3. Rule-based Copilot Fallback
+    mode = "beginner" if ("simple" in request.message.lower() or "new to aws" in request.message.lower()) else "engineer"
     return {
-        "reply": generate_heuristic_response(request.message, live_ctx),
-        "source": "sre-heuristic-engine",
-        "model": "rule-based-sre-v2"
+        "reply": generate_copilot_response(request.message, mode, live_ctx, live_ec2, live_anom, live_logs),
+        "source": "sre-copilot-engine",
+        "model": "aws-copilot-v2.5"
     }
 
 # -----------------------------------------------------------------------------

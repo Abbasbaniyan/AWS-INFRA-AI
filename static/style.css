@@ -386,3 +386,86 @@ body {
 .text-emerald { color: var(--accent-emerald); }
 .text-amber { color: var(--accent-amber); }
 .text-rose { color: var(--accent-rose); }
+
+/* ==========================================================================
+   Mobile & Tablet Responsive Scaffolding
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  .app-container {
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow-x: hidden !important;
+  }
+
+  /* 1. Sidebar becomes a horizontal top navigation */
+  .sidebar {
+    width: 100% !important;
+    height: auto !important;
+    flex-direction: row !important;
+    padding: 12px 16px !important;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+  }
+
+  .nav-menu {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+  }
+
+  .nav-item {
+    padding: 8px 12px !important;
+    font-size: 0.8rem !important;
+  }
+
+  /* 2. Main content area takes full screen */
+  .main-content {
+    padding: 16px !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  /* 3. Collapse multi-column grid cards into a single column */
+  .metrics-grid,
+  .dashboard-grid,
+  .topology-grid,
+  .resource-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* 4. Make Topology SVG dynamically fluid */
+  #topologySvg {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 240px !important;
+  }
+
+  /* 5. Fullscreen drawer overlay for AI Assistant */
+  .ai-assistant-panel {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999 !important;
+    border-radius: 0 !important;
+  }
+
+  /* 6. Prevent table overflow clipping */
+  .table-responsive {
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  table {
+    min-width: 500px !important;
+  }
+}

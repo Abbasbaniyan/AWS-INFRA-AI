@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>AWS Infrastructure AI Assistant | CloudOps Control Plane</title>
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -860,85 +860,5 @@
   </div>
 
   <script src="/static/app.js"></script> 
-  <script>
-    // Global lock to prevent the dashboard timer from clearing simulated alerts
-    window.isSimulationLocked = false;
-
-    window.triggerSimulation = async function() {
-      console.log("⚡ Triggering alert simulation...");
-      window.isSimulationLocked = true;
-
-      try {
-        const res = await fetch('/api/simulate-anomaly', { method: 'POST' });
-        const data = await res.json();
-        const anomalies = data.anomalies || [];
-
-        const listEl = document.getElementById('anomaliesList');
-        const pillEl = document.getElementById('anomalyCountPill');
-        const badgeEl = document.getElementById('navAnomalyBadge');
-
-        if (pillEl) pillEl.textContent = `${anomalies.length} Detected`;
-        if (badgeEl) badgeEl.textContent = anomalies.length;
-        if (!listEl) return;
-
-        listEl.innerHTML = '';
-
-        anomalies.forEach(a => {
-          const item = document.createElement('div');
-          item.className = `anomaly-item ${a.severity ? a.severity.toLowerCase() : 'critical'}`;
-          item.style.cssText = 'padding: 10px; border-left: 3px solid var(--accent-rose); background: rgba(239, 68, 68, 0.05); margin-bottom: 8px; border-radius: 6px;';
-          
-          let actionType = 'purge_cache';
-          if (a.id && a.id.includes('cpu')) actionType = 'restart_service';
-          if (a.id && a.id.includes('mem')) actionType = 'purge_cache';
-          if (a.id && a.id.includes('ec2')) actionType = 'reboot_ec2';
-
-          item.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <strong style="color:#fff; font-size:0.85rem;">${a.title}</strong>
-              <span style="font-size:0.7rem; color:var(--text-muted);">${a.timestamp}</span>
-            </div>
-            <div style="font-size:0.75rem; color:var(--text-secondary); margin: 4px 0;">${a.description}</div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-              <span style="font-size:0.7rem; color:var(--accent-indigo); font-family:var(--font-mono);">${a.resource}</span>
-              <div style="display:flex; gap:6px;">
-                <button class="ai-diagnose-btn-inline" onclick="window.sendPromptToAi ? window.sendPromptToAi('${a.ai_prompt}') : (document.getElementById('aiChatInput').value='${a.ai_prompt}', document.getElementById('aiAssistantPanel').classList.add('open'))">
-                  <i data-lucide="sparkles" style="width:12px;height:12px;"></i> AI Plan
-                </button>
-                <button class="ai-diagnose-btn-inline" style="border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="window.triggerRemediation('${a.id}', '${actionType}', '${a.resource_id || 'nginx'}')">
-                  <i data-lucide="zap" style="width:12px;height:12px;"></i> Remediate
-                </button>
-              </div>
-            </div>
-          `;
-          listEl.appendChild(item);
-        });
-
-        if (window.lucide) {
-          window.lucide.createIcons();
-        }
-
-      } catch (err) {
-        console.error("Simulation error:", err);
-      }
-    };
-
-    // Override / attach remediation to safely clear the lock
-    const existingRemediate = window.triggerRemediation;
-    window.triggerRemediation = async function(anomalyId, actionType, target) {
-      window.isSimulationLocked = false;
-      if (typeof existingRemediate === 'function') {
-        await existingRemediate(anomalyId, actionType, target);
-      } else {
-        await fetch('/api/remediate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ anomaly_id: anomalyId, action_type: actionType, target: target })
-        });
-        location.reload();
-      }
-    };
-  </script>
-
 </body>
 </html>
