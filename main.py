@@ -40,8 +40,6 @@ app.add_middleware(
 
 START_TIME = time.time()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:1b")
 
 # Runtime In-Memory Storage
 system_logs = []
@@ -649,36 +647,85 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
     logs = log_data.get("logs", [])
     analysis = analyze_infra_state(ctx, ec2_items, anomalies, logs)
     
-    # 1. Beginner Mode
-    if mode == "beginner" or "explain like i'm new" in p or "simple" in p:
-        if "ec2" in p or "server" in p:
+    # 1. EC2 Explanations (Beginner & Technical)
+    if "ec2" in p or "instance" in p or "server" in p:
+        if mode == "beginner" or "simple" in p or "new to aws" in p:
             return (
                 "### 🖥️ What is an EC2 Instance? (Simple Explanation)\n\n"
                 "Think of an **Amazon EC2 instance** like a **laptop running in an Amazon data center** that you control through the internet.\n\n"
-                f"- **Your Active Fleet:** You currently have **{analysis['ec2_count']}** virtual machines running.\n"
-                f"- **How Hard It's Working:** CPU is at **{ctx['cpu']['percent']}%**.\n\n"
-                "> 💡 **Analogy:** If your home laptop gets hot with 50 browser tabs open, that is high CPU. EC2 works the same way!"
+                f"- **Your Active Fleet:** You currently have **{analysis['ec2_count']}** virtual server(s) running.\n"
+                f"- **How Hard It's Working:** CPU is at **{ctx['cpu']['percent']}%**, and RAM is at **{ctx['memory']['percent']}%**.\n\n"
+                "> 💡 **Analogy:** If your home laptop gets hot with 50 browser tabs open, that is high CPU. EC2 works the exact same way!"
             )
-        elif "vpc" in p or "network" in p:
+        return (
+            "### 🖥️ Amazon Elastic Compute Cloud (Amazon EC2)\n\n"
+            "Amazon EC2 provides scalable on-demand compute capacity in the AWS Cloud.\n\n"
+            f"- **Your Monitored Fleet:** **{analysis['ec2_count']}** instance(s) registered in `eu-north-1`.\n"
+            f"- **Current Host Workload:** CPU is at **{ctx['cpu']['percent']}%**, RAM is at **{ctx['memory']['percent']}%**.\n\n"
+            "#### 🛠️ Essential AWS CLI & Triage Commands:\n"
+            "```bash\n"
+            "# List running EC2 instances with details\n"
+            "aws ec2 describe-instances --filters 'Name=instance-state-name,Values=running' --output table\n\n"
+            "# Inspect instance system console log output\n"
+            "aws ec2 get-console-output --instance-id <instance-id>\n\n"
+            "# Safely reboot an EC2 instance via CLI\n"
+            "aws ec2 reboot-instances --instance-ids <instance-id>\n"
+            "```\n\n"
+            "#### 💡 SRE Best Practice:\n"
+            "Always attach an **IAM Instance Profile** for role-based permissions instead of hardcoding API keys on instances."
+        )
+
+    # 2. VPC & Networking
+    if "vpc" in p or "network" in p or "subnet" in p:
+        if mode == "beginner" or "simple" in p or "new to aws" in p:
             return (
                 "### 🌐 What is a VPC? (Simple Explanation)\n\n"
                 "A **VPC (Virtual Private Cloud)** is like a **gated community in the cloud** for your servers.\n\n"
                 "- Only people with the key (Security Groups) can come in through the gate.\n"
                 "- Your servers inside can safely talk to each other without being exposed to the wild internet."
             )
-        else:
-            top_issue = analysis['issues'][0] if analysis['issues'] else None
-            issue_msg = f"Your virtual server is under stress: **{top_issue['target']}** is reaching **{top_issue['metric']}**." if top_issue else "Everything in your cloud is running smoothly and calmly."
-            return (
-                f"### 🛡️ Infrastructure Health Overview (Beginner Mode)\n\n"
-                f"Your overall cloud health score is **{analysis['score']}/100** ({analysis['status']}).\n\n"
-                f"**What's going on:**\n{issue_msg}\n\n"
-                "**What you should do next:**\n"
-                "1. If CPU or RAM is high, check which apps are working the hardest.\n"
-                "2. Click **'Simulate Alert'** and then **'Remediate'** on your dashboard to see auto-healing in action!"
-            )
+        return (
+            "### 🌐 Amazon Virtual Private Cloud (Amazon VPC)\n\n"
+            "Amazon VPC provisions a logically isolated section of the AWS Cloud where you launch AWS resources in a virtual network you define.\n\n"
+            "- **Key Components:** Subnets (Public with IGW, Private with NAT Gateway), Route Tables, and Internet Gateways.\n"
+            "- **Security Controls:** Security Groups (stateful firewall at instance level) and Network ACLs (stateless at subnet level).\n\n"
+            "```bash\n"
+            "# List active VPCs\n"
+            "aws ec2 describe-vpcs --output table\n\n"
+            "# Inspect subnets in a VPC\n"
+            "aws ec2 describe-subnets --filters 'Name=vpc-id,Values=<vpc-id>'\n"
+            "```"
+        )
 
-    # 2. Comprehensive Health & RCA (Engineer Mode)
+    # 3. S3 & Storage
+    if "s3" in p or "bucket" in p or "storage" in p:
+        return (
+            "### 🪣 Amazon Simple Storage Service (Amazon S3)\n\n"
+            "Amazon S3 is high-durability object storage for backups, static assets, and data lakes.\n\n"
+            "#### 🛠️ Essential Commands:\n"
+            "```bash\n"
+            "# List all S3 buckets\n"
+            "aws s3 ls\n\n"
+            "# Check bucket size aggregate\n"
+            "aws s3 ls s3://<bucket-name> --recursive --human-readable --summarize\n"
+            "```"
+        )
+
+    # 4. IAM & Security
+    if "iam" in p or "role" in p or "policy" in p or "permission" in p:
+        return (
+            "### 🛡️ AWS Identity and Access Management (IAM)\n\n"
+            "IAM securely manages identities and access permissions for AWS resources.\n\n"
+            "#### 🛠️ Security Audit Commands:\n"
+            "```bash\n"
+            "# List all IAM roles\n"
+            "aws iam list-roles --max-items 15 --output table\n\n"
+            "# List attached policies for a role\n"
+            "aws iam list-attached-role-policies --role-name <role-name>\n"
+            "```"
+        )
+
+    # 5. Health & RCA / "What's wrong"
     if "health" in p or "what's wrong" in p or "why is my infrastructure" in p or "analyze" in p:
         if not analysis['issues']:
             return (
@@ -695,7 +742,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             f"**Primary Bottleneck Identified:** `{top['target']}` at `{top['metric']}`\n\n"
             f"#### 🔍 Root Cause Analysis (RCA):\n"
             f"- **Confidence:** `HIGH (92%)`\n"
-            f"- **Evidence:** Kernel metrics show `{top['target']}` exceeded baseline threshold. Active anomalies: `{analysis['anomaly_count']}`.\n"
+            f"- **Evidence:** Kernel metrics show `{top['target']}` exceeded threshold. Active anomalies: `{analysis['anomaly_count']}`.\n"
             f"- **Impact:** {top['impact']}.\n\n"
             "#### 🛠️ Immediate Triaging Commands:\n"
             "```bash\n"
@@ -703,12 +750,10 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "ps aux --sort=-%cpu,-%mem | head -n 8\n\n"
             "# 2. Inspect kernel dmesg for OOM or CPU stalls\n"
             "dmesg -T | tail -n 20\n"
-            "```\n\n"
-            "#### ⚡ Remediation Recommendation:\n"
-            "Trigger auto-remediation via the dashboard Anomaly Feed or recycle worker thread daemons."
+            "```"
         )
 
-    # 3. Prioritization Engine
+    # 6. Prioritization / "What should I fix first"
     if "fix" in p or "priorit" in p or "action" in p:
         if not analysis['issues']:
             return "### ✅ No Action Required: Infrastructure is running within optimal operating limits."
@@ -719,7 +764,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
         res += "#### 🛠️ Recommended Sequence: Resolve P1 items first to eliminate immediate latency spikes."
         return res
 
-    # 4. Architecture Lookups
+    # 7. Architecture Overview
     if "architecture" in p or "topology" in p:
         return (
             "### 🏗️ Live Infrastructure Architecture Overview\n\n"
@@ -736,7 +781,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             f"- **Monitored Nodes:** 6 Topology Nodes | {analysis['ec2_count']} Compute Resources Active"
         )
 
-    # 5. Default Copilot Fallback
+    # 8. Default Live Telemetry Fallback
     top_proc = ctx.get('top_processes', [{}])[0]
     proc_name = top_proc.get('name', 'system')
     proc_cpu = top_proc.get('cpu_percent', 0.0)
@@ -748,10 +793,11 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
         f"- **Top Monitored Process:** `{proc_name}` (`{proc_cpu}% CPU`)\n"
         f"- **Cloud Inventory:** `{analysis['ec2_count']}` EC2 instances in `eu-north-1`.\n\n"
         "#### 💡 Suggested Inquiries:\n"
+        "- `What is EC2?`\n"
+        "- `What is VPC?`\n"
         "- `Explain my health`\n"
         "- `What should I fix first?`\n"
-        "- `Explain this to me like I'm new to AWS`\n"
-        "- `Explain my architecture`"
+        "- `Explain this to me like I'm new to AWS`"
     )
 
 @app.post("/chat")
@@ -785,7 +831,7 @@ Guidelines:
 3. If asked about current health, bottlenecks, or what to fix first, reference their actual live metrics and anomalies directly.
 4. Keep formatting clean, bold, scannable, and actionable."""
 
-    # 2. Query Groq LLM (LLaMA 3.3 70B) if API Key is configured
+    # 2. Query Groq LLM if API Key is configured
     if GROQ_API_KEY:
         try:
             client = Groq(api_key=GROQ_API_KEY)
