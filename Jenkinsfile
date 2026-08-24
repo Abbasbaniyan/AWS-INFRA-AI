@@ -8,7 +8,7 @@ pipeline {
         HOST_PORT          = '8000'
         CONTAINER_PORT     = '8000'
         AWS_DEFAULT_REGION = 'eu-north-1'
-        GROQ_API_KEY       = 'gsk_your_actual_key_here'
+        GROQ_API_KEY       = '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'
     }
 
     stages {
