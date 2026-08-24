@@ -2,92 +2,119 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'aws-infra-ai'
-        CONTAINER_NAME = 'aws-infra-ai'
-        APP_PORT = '8000'
+        APP_NAME           = 'aws-infra-ai'
+        IMAGE_NAME         = 'aws-infra-ai'
+        CONTAINER_NAME     = 'aws-infra-ai-prod'
+        HOST_PORT          = '8000'
+        CONTAINER_PORT     = '8000'
+        AWS_DEFAULT_REGION = 'eu-north-1'
     }
 
     stages {
-
         stage('Checkout') {
             steps {
-                echo 'Checking out latest source code...'
                 checkout scm
+                sh 'git log -1 --oneline'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Validate Syntax') {
             steps {
-                echo 'Building Docker image...'
-
                 sh '''
-                    docker build -t ${IMAGE_NAME}:latest .
+                    python3 -m py_compile main.py
                 '''
             }
         }
 
-        stage('Test Docker Image') {
+        stage('Docker Build') {
             steps {
-                echo 'Testing Docker image...'
-
                 sh '''
-                    docker run --rm \
-                    ${IMAGE_NAME}:latest \
-                    python -c "import main; print('Application imported successfully!')"
+                    docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} -t ${IMAGE_NAME}:latest .
                 '''
             }
         }
 
-        stage('Stop Old Container') {
+        stage('Safe Deploy') {
             steps {
-                echo 'Stopping existing application container...'
+                script {
+                    env.PREV_IMAGE = sh(
+                        script: "docker inspect --format='{{.Image}}' ${CONTAINER_NAME} 2>/dev/null || echo ''",
+                        returnStdout: true
+                    ).trim()
 
+                    sh '''
+                        if [ $(docker ps -aq -f name=^/${CONTAINER_NAME}$) ]; then
+                            echo "Stopping existing container: ${CONTAINER_NAME}"
+                            docker stop ${CONTAINER_NAME} || true
+                            docker rm -f ${CONTAINER_NAME} || true
+                        fi
+
+                        docker run -d \
+                            --name ${CONTAINER_NAME} \
+                            --restart unless-stopped \
+                            -p ${HOST_PORT}:${CONTAINER_PORT} \
+                            -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
+                            ${IMAGE_NAME}:${BUILD_NUMBER}
+                    '''
+                }
+            }
+        }
+
+        stage('Health Probe') {
+            steps {
                 sh '''
-                    docker stop ${CONTAINER_NAME} || true
-                    docker rm ${CONTAINER_NAME} || true
+                    echo "Checking container health status..."
+                    ATTEMPTS=0
+                    MAX_ATTEMPTS=15
+                    HEALTH_URL="http://localhost:${HOST_PORT}/health"
+
+                    until curl -s -f ${HEALTH_URL} > /dev/null; do
+                        ATTEMPTS=$((ATTEMPTS+1))
+                        if [ ${ATTEMPTS} -ge ${MAX_ATTEMPTS} ]; then
+                            echo "Health check failed after ${MAX_ATTEMPTS} attempts."
+                            exit 1
+                        fi
+                        echo "Waiting for app to start (${ATTEMPTS}/${MAX_ATTEMPTS})..."
+                        sleep 2
+                    done
+
+                    echo "Application is Healthy!"
+                    curl -s ${HEALTH_URL}
                 '''
             }
         }
 
-        stage('Deploy Container') {
+        stage('Image Pruning') {
             steps {
-                echo 'Deploying application container...'
-
                 sh '''
-                    docker run -d \
-                    --name ${CONTAINER_NAME} \
-                    -p ${APP_PORT}:8000 \
-                    ${IMAGE_NAME}:latest
-                '''
-            }
-        }
-
-        stage('Verify Deployment') {
-            steps {
-                echo 'Verifying application...'
-
-                sh '''
-                    sleep 5
-
-                    curl -f http://localhost:${APP_PORT}/ || exit 1
-
-                    echo "Application is running successfully!"
+                    docker image prune -f --filter "until=72h" || true
                 '''
             }
         }
     }
 
     post {
-        success {
-            echo '======================================'
-            echo 'CI/CD Pipeline completed successfully!'
-            echo 'Docker container deployed successfully.'
-            echo '======================================'
-        }
-
         failure {
-            echo 'Pipeline failed. Check the Jenkins console logs.'
-            sh 'docker ps -a || true'
+            echo "Deployment failed. Rolling back to previous working container..."
+            sh '''
+                if [ -n "${PREV_IMAGE}" ]; then
+                    echo "Rolling back to: ${PREV_IMAGE}"
+                    docker stop ${CONTAINER_NAME} || true
+                    docker rm -f ${CONTAINER_NAME} || true
+                    docker run -d \
+                        --name ${CONTAINER_NAME} \
+                        --restart unless-stopped \
+                        -p ${HOST_PORT}:${CONTAINER_PORT} \
+                        -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
+                        ${PREV_IMAGE}
+                    echo "Rollback completed successfully."
+                else
+                    echo "No previous image found for rollback."
+                fi
+            '''
+        }
+        success {
+            echo "Pipeline succeeded! AWS Infra AI is live on port ${HOST_PORT}."
         }
     }
 }
