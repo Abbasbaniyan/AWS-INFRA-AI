@@ -40,7 +40,7 @@ START_TIME = time.time()
 
 # Ollama Server Configuration (from environment)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:14b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:1b")
 
 # Runtime In-Memory Storage
 system_logs = []
@@ -137,7 +137,6 @@ def log_event(level: str, source: str, message: str):
         system_logs.pop()
     return entry
 
-# Initial seed telemetry logs
 for lvl, src, msg in [
     ("INFO", "CloudWatch", "Metric alarm 'High-CPU-Utilization' evaluated OK."),
     ("INFO", "EC2-SSM", "SSM Agent ping status healthy on instance i-08a79c234f9a1."),
@@ -200,10 +199,9 @@ def query_cloudwatch_incident_context(log_group: str = "/aws/ec2/system") -> Dic
 # -----------------------------------------------------------------------------
 @app.get("/api/ai/health")
 async def get_ai_server_health():
-    """Checks the health and latency of the remote Ollama server."""
     start = time.time()
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=8.0) as client:
             res = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
             latency_ms = round((time.time() - start) * 1000, 2)
             if res.status_code == 200:
@@ -736,7 +734,6 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
     logs = log_data.get("logs", [])
     analysis = analyze_infra_state(ctx, ec2_items, anomalies, logs)
     
-    # 1. CloudWatch & Incident Queries
     if "alarm" in p or "incident" in p or "troubleshoot" in p or "triag" in p:
         alarms_str = "\n".join([f"- `{a}`" for a in incident_ctx.get("active_alarms", [])])
         errors_str = "\n".join([f"- `{err}`" for err in incident_ctx.get("recent_error_logs", [])])
@@ -756,7 +753,6 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "```"
         )
 
-    # 2. EC2 Queries
     if "ec2" in p or "instance" in p or "server" in p:
         if mode == "beginner" or "simple" in p or "new to aws" in p:
             return (
@@ -784,7 +780,6 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "Always attach an **IAM Instance Profile** for role-based permissions instead of hardcoding API keys on instances."
         )
 
-    # 3. VPC Queries
     if "vpc" in p or "network" in p or "subnet" in p:
         return (
             "### 🌐 Amazon Virtual Private Cloud (Amazon VPC)\n\n"
@@ -799,7 +794,6 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "```"
         )
 
-    # 4. S3 Queries
     if "s3" in p or "bucket" in p or "storage" in p:
         return (
             "### 🪣 Amazon Simple Storage Service (Amazon S3)\n\n"
@@ -812,7 +806,6 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "```"
         )
 
-    # 5. Health & Root Cause Analysis
     if "health" in p or "what's wrong" in p or "why is my infrastructure" in p or "analyze" in p:
         if not analysis['issues']:
             return (
@@ -840,7 +833,6 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "```"
         )
 
-    # 6. Prioritization
     if "fix" in p or "priorit" in p or "action" in p:
         if not analysis['issues']:
             return "### ✅ No Action Required: Infrastructure is running within optimal operating limits."
@@ -851,7 +843,6 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
         res += "#### 🛠️ Recommended Sequence: Resolve P1 items first to eliminate immediate latency spikes."
         return res
 
-    # 7. Default Fallback
     top_proc = ctx.get('top_processes', [{}])[0]
     proc_name = top_proc.get('name', 'system')
     proc_cpu = top_proc.get('cpu_percent', 0.0)
@@ -892,18 +883,18 @@ LIVE INFRASTRUCTURE & CLOUDWATCH INCIDENT SNAPSHOT:
 - Active Anomaly Alerts: {len(live_anom.get('anomalies', []))} detected
 """
 
-    system_prompt = f"""You are the AWS Infrastructure AI Assistant & CloudWatch Incident SRE Copilot.
-You have direct, real-time access to live infrastructure telemetry and AWS CloudWatch incident context:
+    system_prompt = f"""You are CloudOps AI SRE, an intelligent Site Reliability Engineer and AI assistant.
+You have real-time access to live infrastructure telemetry:
 {context_str}
 
 Guidelines:
-1. When asked technical, incident, or alarm questions, perform Root Cause Analysis (RCA) correlating alarms, logs, and resource bottlenecks. Provide exact AWS CLI/Linux commands in markdown code blocks.
-2. If asked to explain simply or "like I'm new", use clear analogies and step-by-step guidance.
-3. Keep formatting clean, bold, scannable, and actionable."""
+1. When asked about DevOps, AWS, cloud infrastructure, alarms, or metrics, provide expert analysis, root-cause diagnostics, and actionable bash/AWS CLI commands in markdown code blocks.
+2. When asked general knowledge, programming, or everyday conversational questions, answer them accurately, helpfully, and concisely without refusing.
+3. Keep answers clear, structured, and easy to read."""
 
     # 1. Query Self-Hosted Ollama API on Server 2
     try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
+        async with httpx.AsyncClient(timeout=90.0) as client:
             ollama_payload = {
                 "model": OLLAMA_MODEL,
                 "messages": [
