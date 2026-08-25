@@ -8,7 +8,9 @@ pipeline {
         HOST_PORT          = '8000'
         CONTAINER_PORT     = '8000'
         AWS_DEFAULT_REGION = 'eu-north-1'
-        GROQ_API_KEY       = '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'
+        // Replace with your actual Server 2 Private IP
+        OLLAMA_BASE_URL    = 'http://172.31.38.194:11434'
+        OLLAMA_MODEL       = 'qwen2.5-coder:14b'
     }
 
     stages {
@@ -21,9 +23,7 @@ pipeline {
 
         stage('Validate Syntax') {
             steps {
-                sh '''
-                    python3 -m py_compile main.py
-                '''
+                sh 'python3 -m py_compile main.py'
             }
         }
 
@@ -56,7 +56,8 @@ pipeline {
                             --restart unless-stopped \
                             -p ${HOST_PORT}:${CONTAINER_PORT} \
                             -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
-                            -e GROQ_API_KEY="${GROQ_API_KEY}" \
+                            -e OLLAMA_BASE_URL="${OLLAMA_BASE_URL}" \
+                            -e OLLAMA_MODEL="${OLLAMA_MODEL}" \
                             ${IMAGE_NAME}:${BUILD_NUMBER}
                     '''
                 }
@@ -89,19 +90,16 @@ pipeline {
 
         stage('Image Pruning') {
             steps {
-                sh '''
-                    docker image prune -f --filter "until=72h" || true
-                '''
+                sh 'docker image prune -f --filter "until=72h" || true'
             }
         }
     }
 
     post {
         failure {
-            echo "Deployment failed. Rolling back to previous working container..."
+            echo "Deployment failed. Rolling back..."
             sh '''
                 if [ -n "${PREV_IMAGE}" ]; then
-                    echo "Rolling back to: ${PREV_IMAGE}"
                     docker stop ${CONTAINER_NAME} || true
                     docker rm -f ${CONTAINER_NAME} || true
                     docker run -d \
@@ -109,16 +107,14 @@ pipeline {
                         --restart unless-stopped \
                         -p ${HOST_PORT}:${CONTAINER_PORT} \
                         -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
-                        -e GROQ_API_KEY="${GROQ_API_KEY}" \
+                        -e OLLAMA_BASE_URL="${OLLAMA_BASE_URL}" \
+                        -e OLLAMA_MODEL="${OLLAMA_MODEL}" \
                         ${PREV_IMAGE}
-                    echo "Rollback completed successfully."
-                else
-                    echo "No previous image found for rollback."
                 fi
             '''
         }
         success {
-            echo "Pipeline succeeded! AWS Infra AI is live on port ${HOST_PORT}."
+            echo "Deployment successful on port ${HOST_PORT}."
         }
     }
 }

@@ -1,7 +1,6 @@
 """
 AWS Infrastructure AI Assistant & CloudWatch Incident Troubleshooting System
-Provides RESTful APIs for hardware telemetry, anomaly evaluation, 
-infrastructure topology, CloudWatch incident triage, service lifecycle actions, and AI troubleshooting.
+Backend Application Server with Self-Hosted Ollama AI Inference Engine.
 """
 
 import os
@@ -20,20 +19,13 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import httpx
 
-# Safe Groq Import
-try:
-    from groq import Groq
-    GROQ_AVAILABLE = True
-except ImportError:
-    GROQ_AVAILABLE = False
-
 # Load environment variables
 load_dotenv()
 
 app = FastAPI(
-    title="AWS Infrastructure AI Assistant & Incident SRE API",
-    description="Real-time infrastructure monitoring, CloudWatch incident triage, and AI troubleshooting backend.",
-    version="2.5.0"
+    title="AWS Infrastructure AI Assistant API",
+    description="Real-time infrastructure monitoring, CloudWatch triage, and Ollama-powered AI troubleshooting.",
+    version="2.6.0"
 )
 
 app.add_middleware(
@@ -45,7 +37,10 @@ app.add_middleware(
 )
 
 START_TIME = time.time()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+
+# Ollama Server Configuration (from environment)
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:14b")
 
 # Runtime In-Memory Storage
 system_logs = []
@@ -82,7 +77,7 @@ class RemediationRequest(BaseModel):
     target: str
 
 # -----------------------------------------------------------------------------
-# Telemetry & CloudWatch Helpers
+# Telemetry Helpers
 # -----------------------------------------------------------------------------
 def get_network_rates():
     n1 = psutil.net_io_counters()
@@ -157,7 +152,6 @@ def get_aws_session():
     return boto3.Session(region_name=region)
 
 def query_cloudwatch_incident_context(log_group: str = "/aws/ec2/system") -> Dict[str, Any]:
-    """Pulls live CloudWatch alarms, metric spikes, and log traces for incident triage."""
     session = get_aws_session()
     cw = session.client("cloudwatch")
     logs_client = session.client("logs")
@@ -167,7 +161,7 @@ def query_cloudwatch_incident_context(log_group: str = "/aws/ec2/system") -> Dic
         alarm_res = cw.describe_alarms(StateValue="ALARM")
         for a in alarm_res.get("MetricAlarms", []):
             alarms.append(f"{a['AlarmName']} (Metric: {a['MetricName']}, Reason: {a.get('StateReason', '')[:100]})")
-    except Exception as e:
+    except Exception:
         alarms = ["No active CloudWatch alarm threshold breached."]
 
     error_logs = []
@@ -191,7 +185,6 @@ def query_cloudwatch_incident_context(log_group: str = "/aws/ec2/system") -> Dic
                 break
             time.sleep(0.3)
     except Exception:
-        # Fallback to internal recent warning/error log stream
         error_logs = [l["message"] for l in system_logs if l["level"] in ["WARN", "CRITICAL"]][:3]
         if not error_logs:
             error_logs = ["[INFO] Zero critical runtime anomalies detected in application logs."]
@@ -203,6 +196,37 @@ def query_cloudwatch_incident_context(log_group: str = "/aws/ec2/system") -> Dic
     }
 
 # -----------------------------------------------------------------------------
+# Ollama Health Check Endpoint
+# -----------------------------------------------------------------------------
+@app.get("/api/ai/health")
+async def get_ai_server_health():
+    """Checks the health and latency of the remote Ollama server."""
+    start = time.time()
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            res = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            latency_ms = round((time.time() - start) * 1000, 2)
+            if res.status_code == 200:
+                models = [m.get("name") for m in res.json().get("models", [])]
+                return {
+                    "engine": "Ollama",
+                    "status": "ONLINE",
+                    "configured_model": OLLAMA_MODEL,
+                    "server_url": OLLAMA_BASE_URL,
+                    "available_models": models,
+                    "latency_ms": latency_ms
+                }
+    except Exception as e:
+        return {
+            "engine": "Ollama",
+            "status": "OFFLINE",
+            "configured_model": OLLAMA_MODEL,
+            "server_url": OLLAMA_BASE_URL,
+            "error": str(e),
+            "fallback": "Rule-Based Heuristic SRE Engine Active"
+        }
+
+# -----------------------------------------------------------------------------
 # Core API Endpoints
 # -----------------------------------------------------------------------------
 @app.get("/health")
@@ -210,7 +234,7 @@ def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "2.5.0"
+        "version": "2.6.0"
     }
 
 @app.get("/metrics")
@@ -274,7 +298,6 @@ def get_metrics():
 
 @app.get("/api/incidents/triage")
 def get_incident_triage():
-    """Provides a consolidated CloudWatch and host incident triage report."""
     incident_data = query_cloudwatch_incident_context()
     anomalies = get_anomalies()
     metrics = get_metrics()
@@ -414,7 +437,6 @@ async def execute_remediation(req: RemediationRequest):
             success = True
 
     simulated_anomalies = []
-
     end_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     current_health = get_metrics()["health"]["score"]
     
@@ -714,7 +736,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
     logs = log_data.get("logs", [])
     analysis = analyze_infra_state(ctx, ec2_items, anomalies, logs)
     
-    # 1. CloudWatch Alarms & Incident Triage Queries
+    # 1. CloudWatch & Incident Queries
     if "alarm" in p or "incident" in p or "troubleshoot" in p or "triag" in p:
         alarms_str = "\n".join([f"- `{a}`" for a in incident_ctx.get("active_alarms", [])])
         errors_str = "\n".join([f"- `{err}`" for err in incident_ctx.get("recent_error_logs", [])])
@@ -734,7 +756,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "```"
         )
 
-    # 2. EC2 Explanations
+    # 2. EC2 Queries
     if "ec2" in p or "instance" in p or "server" in p:
         if mode == "beginner" or "simple" in p or "new to aws" in p:
             return (
@@ -762,7 +784,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "Always attach an **IAM Instance Profile** for role-based permissions instead of hardcoding API keys on instances."
         )
 
-    # 3. VPC & Networking
+    # 3. VPC Queries
     if "vpc" in p or "network" in p or "subnet" in p:
         return (
             "### 🌐 Amazon Virtual Private Cloud (Amazon VPC)\n\n"
@@ -777,12 +799,11 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "```"
         )
 
-    # 4. S3 & Storage
+    # 4. S3 Queries
     if "s3" in p or "bucket" in p or "storage" in p:
         return (
             "### 🪣 Amazon Simple Storage Service (Amazon S3)\n\n"
             "Amazon S3 is high-durability object storage for backups, static assets, and data lakes.\n\n"
-            "#### 🛠️ Essential Commands:\n"
             "```bash\n"
             "# List all S3 buckets\n"
             "aws s3 ls\n\n"
@@ -791,21 +812,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "```"
         )
 
-    # 5. IAM & Security
-    if "iam" in p or "role" in p or "policy" in p or "permission" in p:
-        return (
-            "### 🛡️ AWS Identity and Access Management (IAM)\n\n"
-            "IAM securely manages identities and access permissions for AWS resources.\n\n"
-            "#### 🛠️ Security Audit Commands:\n"
-            "```bash\n"
-            "# List all IAM roles\n"
-            "aws iam list-roles --max-items 15 --output table\n\n"
-            "# List attached policies for a role\n"
-            "aws iam list-attached-role-policies --role-name <role-name>\n"
-            "```"
-        )
-
-    # 6. Health & Root Cause Analysis (RCA)
+    # 5. Health & Root Cause Analysis
     if "health" in p or "what's wrong" in p or "why is my infrastructure" in p or "analyze" in p:
         if not analysis['issues']:
             return (
@@ -833,7 +840,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "```"
         )
 
-    # 7. Action Plan & Prioritization
+    # 6. Prioritization
     if "fix" in p or "priorit" in p or "action" in p:
         if not analysis['issues']:
             return "### ✅ No Action Required: Infrastructure is running within optimal operating limits."
@@ -844,24 +851,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
         res += "#### 🛠️ Recommended Sequence: Resolve P1 items first to eliminate immediate latency spikes."
         return res
 
-    # 8. Architecture Overview
-    if "architecture" in p or "topology" in p:
-        return (
-            "### 🏗️ Live Infrastructure Architecture Overview\n\n"
-            "```\n"
-            "Internet (Global Clients) -> CloudFront Edge CDN -> AWS ALB (Port 8000)\n"
-            "                                                        |\n"
-            "                   +------------------------------------+-----------------------------------+\n"
-            "                   |                                                                        |\n"
-            "         EC2 Auto-Scaling Fleet (FastAPI Engine)                             S3 Static & Telemetry Archive\n"
-            "                   |\n"
-            "         Aurora PostgreSQL (Port 5432)\n"
-            "```\n"
-            f"- **Region:** `eu-north-1`\n"
-            f"- **Monitored Nodes:** 6 Topology Nodes | {analysis['ec2_count']} Compute Resources Active"
-        )
-
-    # 9. Default Live Telemetry Fallback
+    # 7. Default Fallback
     top_proc = ctx.get('top_processes', [{}])[0]
     proc_name = top_proc.get('name', 'system')
     proc_cpu = top_proc.get('cpu_percent', 0.0)
@@ -889,7 +879,6 @@ async def chat(request: ChatRequest):
     live_logs = get_logs(limit=10)
     incident_ctx = query_cloudwatch_incident_context()
 
-    # 1. System Prompt with CloudWatch Incident Context
     context_str = f"""
 LIVE INFRASTRUCTURE & CLOUDWATCH INCIDENT SNAPSHOT:
 - Region: eu-north-1
@@ -912,33 +901,39 @@ Guidelines:
 2. If asked to explain simply or "like I'm new", use clear analogies and step-by-step guidance.
 3. Keep formatting clean, bold, scannable, and actionable."""
 
-    # 2. Query Groq LLM if package is available and API Key is configured
-    if GROQ_AVAILABLE and GROQ_API_KEY:
-        try:
-            client = Groq(api_key=GROQ_API_KEY)
-            chat_completion = client.chat.completions.create(
-                messages=[
+    # 1. Query Self-Hosted Ollama API on Server 2
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            ollama_payload = {
+                "model": OLLAMA_MODEL,
+                "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": request.message}
                 ],
-                model="llama-3.3-70b-versatile",
-                temperature=0.3,
-                max_tokens=750,
-            )
-            return {
-                "reply": chat_completion.choices[0].message.content,
-                "source": "groq-llama-3.3-70b",
-                "model": "llama-3.3-70b-versatile"
+                "stream": False,
+                "options": {
+                    "temperature": 0.3,
+                    "num_ctx": 4096
+                }
             }
-        except Exception as e:
-            print(f"⚠️ Groq API connection fallback: {e}")
+            res = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=ollama_payload)
+            if res.status_code == 200:
+                content = res.json().get("message", {}).get("content", "")
+                if content:
+                    return {
+                        "reply": content,
+                        "source": f"ollama-{OLLAMA_MODEL}",
+                        "model": OLLAMA_MODEL
+                    }
+    except Exception as e:
+        print(f"⚠️ Remote Ollama connection offline or timed out: {e}")
 
-    # 3. Rule-based Copilot Fallback
+    # 2. Rule-based SRE Copilot Fallback
     mode = "beginner" if ("simple" in request.message.lower() or "new to aws" in request.message.lower()) else "engineer"
     return {
         "reply": generate_copilot_response(request.message, mode, live_ctx, live_ec2, live_anom, live_logs, incident_ctx),
         "source": "sre-copilot-engine",
-        "model": "aws-copilot-v2.5"
+        "model": "aws-copilot-v2.6"
     }
 
 # -----------------------------------------------------------------------------
