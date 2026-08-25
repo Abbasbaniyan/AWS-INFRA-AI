@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 import random
 import psutil
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -234,6 +234,12 @@ def health_check():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": "2.6.0"
     }
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    if os.path.exists("static/favicon.ico"):
+        return FileResponse("static/favicon.ico")
+    return Response(status_code=204)
 
 @app.get("/metrics")
 def get_metrics():
