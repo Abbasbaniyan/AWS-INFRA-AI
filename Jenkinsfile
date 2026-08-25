@@ -9,7 +9,7 @@ pipeline {
         CONTAINER_PORT     = '8000'
         AWS_DEFAULT_REGION = 'eu-north-1'
         // Replace with your Server 2 Private IP
-        OLLAMA_BASE_URL    = 'http://172.31.22.105:11434'
+        OLLAMA_BASE_URL    = 'http://172.31.38.194:11434'
         OLLAMA_MODEL       = 'qwen2.5-coder:14b'
     }
 
