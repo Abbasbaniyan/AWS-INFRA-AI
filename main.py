@@ -902,14 +902,24 @@ async def chat(request: ChatRequest):
         for p in live_ctx.get("top_processes", [])
     ])
 
+    # Format EC2 instances explicitly for the LLM
+    ec2_items = live_ec2.get("items", [])
+    running_ec2 = [inst for inst in ec2_items if inst.get("status", "").lower() == "running"]
+    ec2_list = "\n".join([
+        f"  - {inst['name']} (ID: {inst['id']}, State: {inst['status']}, Type: {inst.get('details', {}).get('type', 'N/A')})"
+        for inst in ec2_items
+    ])
+
     context_str = f"""
 LIVE INFRASTRUCTURE & CLOUDWATCH INCIDENT SNAPSHOT:
 - Region: eu-north-1
+- Total EC2 Inventory: {len(ec2_items)} instance(s) ({len(running_ec2)} RUNNING)
+- EC2 Fleet Details:
+{ec2_list}
 - Health Score: {live_ctx['health']['score']}/100 ({live_ctx['health']['status']})
 - CPU Utilization: {live_ctx['cpu']['percent']}% across {live_ctx['cpu']['cores']} cores
 - Memory Allocation: {live_ctx['memory']['percent']}% ({live_ctx['memory']['used_gb']}GB used / {live_ctx['memory']['total_gb']}GB total)
 - Disk Headroom: {live_ctx['disk']['percent']}% used
-- EC2 Inventory: {len(live_ec2.get('items', []))} instances active
 - Active Top Processes on Host:
 {top_procs_list}
 - CloudWatch Triggered Alarms: {incident_ctx['active_alarms']}
@@ -923,9 +933,10 @@ Live Telemetry Context:
 {context_str}
 
 Instructions:
-1. When asked about system health, CPU/RAM, processes, alarms, or AWS cloud resources, answer accurately and directly using the telemetry snapshot provided above.
-2. When asked general knowledge questions, conversational queries, programming questions, or about famous people/places/events, answer them helpfully, accurately, and concisely. Do not refuse general questions.
-3. Keep answers clear, structured, and easy to read."""
+1. When asked about EC2 instances, state the exact number of running instances and list their names and IDs directly from the snapshot above.
+2. When asked about system health, CPU/RAM, processes, alarms, or AWS cloud resources, answer accurately and directly using the telemetry snapshot provided above.
+3. When asked general knowledge questions, conversational queries, programming questions, or about famous people/places/events, answer them helpfully, accurately, and concisely. Do not refuse general questions.
+4. Keep answers clear, structured, and easy to read."""
 
     # Build full message history for multi-turn chat
     messages_payload = [{"role": "system", "content": system_prompt}]
