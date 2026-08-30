@@ -10,7 +10,7 @@ pipeline {
         AWS_DEFAULT_REGION = 'eu-north-1'
         // Replace with your Server 2 Private IP
         OLLAMA_BASE_URL    = 'http://172.31.38.194:11434'
-        OLLAMA_MODEL = 'llama3.2:1b'
+        OLLAMA_MODEL = 'qwen2.5:0.5b'
     }
 
     stages {

@@ -40,7 +40,7 @@ START_TIME = time.time()
 
 # Ollama Server Configuration (from environment)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:1b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:0.5b")
 
 # Runtime In-Memory Storage
 system_logs = []
