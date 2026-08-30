@@ -517,7 +517,6 @@ def fetch_live_s3():
             total_bytes = 0
             obj_count = 0
 
-            # Calculate live bucket size and object count
             try:
                 for page in paginator.paginate(Bucket=name):
                     if "Contents" in page:
@@ -525,7 +524,7 @@ def fetch_live_s3():
                             total_bytes += obj["Size"]
                             obj_count += 1
             except Exception:
-                pass  # Fallback if permissions restrict ListObjects
+                pass
 
             size_mb = round(total_bytes / (1024 * 1024), 2)
 
@@ -926,15 +925,10 @@ Live infrastructure telemetry snapshot:
 Guidelines:
 1. You are fully authorized to perform security audits, metric inspections, and diagnostic reviews for internal EC2 instances (e.g., instance IDs like i-...).
 2. When asked to audit or inspect an instance, provide its current operational status, security recommendations (IAM profiles, security groups, patch levels), and CloudWatch diagnostic runbooks.
-3. When asked about DevOps, AWS, alarms, or metrics, provide actionable bash/AWS CLI commands in code blocks.
-4. Keep answers clear, technical, structured, and helpful."""
-{context_str}
-
-Guidelines:
-1. When asked about resource usage, top processes, or bottlenecks, cite the exact process name, PID, CPU%, and RAM% directly from the telemetry snapshot above.
-2. When asked about DevOps, AWS, cloud infrastructure, alarms, or metrics, provide expert root-cause analysis and actionable bash/AWS CLI commands in markdown code blocks.
-3. When asked general knowledge, programming, or everyday conversational questions, answer them accurately, helpfully, and concisely without refusing.
-4. Keep answers clear, structured, and easy to read."""
+3. When asked about resource usage, top processes, or bottlenecks, cite the exact process name, PID, CPU%, and RAM% directly from the telemetry snapshot above.
+4. When asked about DevOps, AWS, cloud infrastructure, alarms, or metrics, provide expert root-cause analysis and actionable bash/AWS CLI commands in markdown code blocks.
+5. When asked general knowledge, programming, or everyday conversational questions, answer them accurately, helpfully, and concisely without refusing.
+6. Keep answers clear, technical, structured, and easy to read."""
 
     # Build full message history for multi-turn chat
     messages_payload = [{"role": "system", "content": system_prompt}]
