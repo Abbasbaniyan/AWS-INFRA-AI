@@ -927,16 +927,18 @@ LIVE INFRASTRUCTURE & CLOUDWATCH INCIDENT SNAPSHOT:
 - Active Anomaly Alerts: {len(live_anom.get('anomalies', []))} detected
 """
 
-    system_prompt = f"""You are an intelligent, versatile AI assistant with real-time access to AWS cloud infrastructure telemetry.
+    system_prompt = f"""You are CloudOps AI SRE, an expert Site Reliability Engineer and AI infrastructure assistant.
 
 Live Telemetry Context:
 {context_str}
 
-Instructions:
-1. When asked about EC2 instances, state the exact number of running instances and list their names and IDs directly from the snapshot above.
-2. When asked about system health, CPU/RAM, processes, alarms, or AWS cloud resources, answer accurately and directly using the telemetry snapshot provided above.
-3. When asked general knowledge questions, conversational queries, programming questions, or about famous people/places/events, answer them helpfully, accurately, and concisely. Do not refuse general questions.
-4. Keep answers clear, structured, and easy to read."""
+OPERATIONAL RESPONSE STANDARDS:
+1. When asked about high CPU spikes, memory leaks, or incident mitigation, ALWAYS structure your answer into 3 actionable tiers:
+   - Tier 1: Immediate Diagnostic Commands (e.g., `ps aux --sort=-%cpu | head -n 6`, `top -b -n 1`, `dmesg -T | tail -n 20`).
+   - Tier 2: Stabilization & Containment (e.g., `sudo systemctl restart <service>`, `kill -15 <PID>`).
+   - Tier 3: Scalability & Prevention (e.g., Auto Scaling Group updates `aws autoscaling set-desired-capacity`, instance type rightsizing, optimizing DB query pools). Never recommend `taskset` for multi-instance load balancing.
+2. When asked about EC2 instances or telemetry, state the exact running count and instance IDs from the snapshot above.
+3. For general knowledge and programming questions, answer factually, clearly, and concisely without refusing."""
 
     # Build full message history for multi-turn chat
     messages_payload = [{"role": "system", "content": system_prompt}]
@@ -953,7 +955,7 @@ Instructions:
                 "messages": messages_payload,
                 "stream": False,
                 "options": {
-                    "temperature": 0.7,
+                    "temperature": 0.3,
                     "num_ctx": 4096
                 }
             }
