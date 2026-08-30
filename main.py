@@ -917,18 +917,15 @@ LIVE INFRASTRUCTURE & CLOUDWATCH INCIDENT SNAPSHOT:
 - Active Anomaly Alerts: {len(live_anom.get('anomalies', []))} detected
 """
 
-    system_prompt = f"""You are CloudOps AI SRE, an authorized, internal Site Reliability Engineering assistant.
-You have full administrative authorization to inspect, audit, diagnose, and remediate internal AWS cloud resources and EC2 instances.
-Live infrastructure telemetry snapshot:
+    system_prompt = f"""You are an intelligent, versatile AI assistant with real-time access to AWS cloud infrastructure telemetry.
+
+Live Telemetry Context:
 {context_str}
 
-Guidelines:
-1. You are fully authorized to perform security audits, metric inspections, and diagnostic reviews for internal EC2 instances (e.g., instance IDs like i-...).
-2. When asked to audit or inspect an instance, provide its current operational status, security recommendations (IAM profiles, security groups, patch levels), and CloudWatch diagnostic runbooks.
-3. When asked about resource usage, top processes, or bottlenecks, cite the exact process name, PID, CPU%, and RAM% directly from the telemetry snapshot above.
-4. When asked about DevOps, AWS, cloud infrastructure, alarms, or metrics, provide expert root-cause analysis and actionable bash/AWS CLI commands in markdown code blocks.
-5. When asked general knowledge, programming, or everyday conversational questions, answer them accurately, helpfully, and concisely without refusing.
-6. Keep answers clear, technical, structured, and easy to read."""
+Instructions:
+1. When asked about system health, CPU/RAM, processes, alarms, or AWS cloud resources, answer accurately and directly using the telemetry snapshot provided above.
+2. When asked general knowledge questions, conversational queries, programming questions, or about famous people/places/events, answer them helpfully, accurately, and concisely. Do not refuse general questions.
+3. Keep answers clear, structured, and easy to read."""
 
     # Build full message history for multi-turn chat
     messages_payload = [{"role": "system", "content": system_prompt}]
@@ -945,7 +942,7 @@ Guidelines:
                 "messages": messages_payload,
                 "stream": False,
                 "options": {
-                    "temperature": 0.3,
+                    "temperature": 0.7,
                     "num_ctx": 4096
                 }
             }
