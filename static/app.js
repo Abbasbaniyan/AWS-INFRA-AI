@@ -578,16 +578,23 @@ async function sendAiMessage() {
       })
     });
 
+    if (!res.ok) {
+      throw new Error(`HTTP Error ${res.status}: Server returned an invalid response.`);
+    }
+
     const data = await res.json();
     removeMessageById(loadingId);
-    appendChatMessage('assistant', data.reply);
+
+    const replyContent = data.reply || 'No response returned from the assistant.';
+    appendChatMessage('assistant', replyContent);
 
     state.chatHistory.push({ role: 'user', content: text });
-    state.chatHistory.push({ role: 'assistant', content: data.reply });
+    state.chatHistory.push({ role: 'assistant', content: replyContent });
 
   } catch (err) {
+    console.error('Chat error:', err);
     removeMessageById(loadingId);
-    appendChatMessage('assistant', '⚠️ Unable to reach backend AI model.');
+    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI model. Please verify your backend server and Ollama instance are running.');
   } finally {
     elements.aiChatInput.disabled = false;
     elements.sendAiChatBtn.disabled = false;

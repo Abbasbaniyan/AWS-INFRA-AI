@@ -510,15 +510,36 @@ def fetch_live_s3():
         response = s3.list_buckets()
         
         items = []
+        paginator = s3.get_paginator("list_objects_v2")
+
         for bucket in response.get("Buckets", []):
+            name = bucket.get("Name")
+            total_bytes = 0
+            obj_count = 0
+
+            # Calculate live bucket size and object count
+            try:
+                for page in paginator.paginate(Bucket=name):
+                    if "Contents" in page:
+                        for obj in page["Contents"]:
+                            total_bytes += obj["Size"]
+                            obj_count += 1
+            except Exception:
+                pass  # Fallback if permissions restrict ListObjects
+
+            size_mb = round(total_bytes / (1024 * 1024), 2)
+
             items.append({
-                "id": bucket.get("Name"),
-                "name": bucket.get("Name"),
+                "id": name,
+                "name": name,
                 "status": "Active",
                 "details": {
-                    "created": bucket.get("CreationDate").strftime("%Y-%m-%d %H:%M:%S")
+                    "created": bucket.get("CreationDate").strftime("%Y-%m-%d"),
+                    "objects": obj_count,
+                    "size_mb": size_mb
                 }
             })
+
         if items:
             return {"items": items, "source": "aws-boto3"}
     except Exception as e:
@@ -526,8 +547,8 @@ def fetch_live_s3():
         
     return {
         "items": [
-            {"id": "s3-prod-assets-vault", "name": "prod-assets-vault", "status": "Active", "details": {"encryption": "AES-256", "versioning": True}},
-            {"id": "s3-telemetry-logs-archive", "name": "telemetry-logs-archive", "status": "Active", "details": {"lifecycle": "Glacier-30d"}}
+            {"id": "s3-prod-assets-vault", "name": "prod-assets-vault", "status": "Active", "details": {"objects": 142, "size_mb": 512.4}},
+            {"id": "s3-telemetry-logs-archive", "name": "telemetry-logs-archive", "status": "Active", "details": {"objects": 1280, "size_mb": 2048.0}}
         ],
         "source": "simulated"
     }
@@ -898,15 +919,19 @@ Guidelines:
 2. When asked general knowledge, programming, or everyday conversational questions, answer them accurately, helpfully, and concisely without refusing.
 3. Keep answers clear, structured, and easy to read."""
 
-    # 1. Query Self-Hosted Ollama API on Server 2
+    # Build full message history for multi-turn chat
+    messages_payload = [{"role": "system", "content": system_prompt}]
+    if request.history:
+        for msg in request.history:
+            messages_payload.append({"role": msg.role, "content": msg.content})
+    messages_payload.append({"role": "user", "content": request.message})
+
+    # 1. Query Self-Hosted Ollama API
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
             ollama_payload = {
                 "model": OLLAMA_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": request.message}
-                ],
+                "messages": messages_payload,
                 "stream": False,
                 "options": {
                     "temperature": 0.3,
@@ -916,7 +941,7 @@ Guidelines:
             res = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=ollama_payload)
             if res.status_code == 200:
                 content = res.json().get("message", {}).get("content", "")
-                if content:
+                if content and content.strip():
                     return {
                         "reply": content,
                         "source": f"ollama-{OLLAMA_MODEL}",
@@ -927,8 +952,9 @@ Guidelines:
 
     # 2. Rule-based SRE Copilot Fallback
     mode = "beginner" if ("simple" in request.message.lower() or "new to aws" in request.message.lower()) else "engineer"
+    fallback_reply = generate_copilot_response(request.message, mode, live_ctx, live_ec2, live_anom, live_logs, incident_ctx)
     return {
-        "reply": generate_copilot_response(request.message, mode, live_ctx, live_ec2, live_anom, live_logs, incident_ctx),
+        "reply": fallback_reply,
         "source": "sre-copilot-engine",
         "model": "aws-copilot-v2.6"
     }
