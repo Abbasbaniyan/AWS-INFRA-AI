@@ -760,15 +760,36 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
     logs = log_data.get("logs", [])
     analysis = analyze_infra_state(ctx, ec2_items, anomalies, logs)
     
-    # ALB / Load Balancer Diagnosis
+    # 1. S3 Storage Diagnosis
+    if "s3" in p or "bucket" in p or "storage" in p or "node-s3" in p:
+        return (
+            "### 🪣 AWS Simple Storage Service (S3) Diagnostics\n\n"
+            "**Resource:** `S3 Storage (node-s3)` | **Region:** `eu-north-1`\n\n"
+            "#### 📊 Bucket Status & Configuration:\n"
+            "- **Status:** `ACTIVE` (Encrypted with AES-256 / SSE-S3)\n"
+            "- **Cross-Region Replication (CRR):** Completed `prod-infra-logs-us-east-1` -> `eu-central-1`\n"
+            "- **Access Logging:** Enabled\n\n"
+            "#### 🛠️ S3 Triage & Diagnostic CLI Commands:\n"
+            "```bash\n"
+            "# 1. List configured S3 buckets\n"
+            "aws s3 ls\n\n"
+            "# 2. Check storage metrics and object counts\n"
+            "aws s3 ls s3://<bucket-name> --recursive --human-readable --summarize\n\n"
+            "# 3. Inspect bucket encryption and policy\n"
+            "aws s3api get-bucket-encryption --bucket <bucket-name>\n"
+            "aws s3api get-bucket-policy --bucket <bucket-name>\n"
+            "```"
+        )
+
+    # 2. ALB / Load Balancer Diagnosis
     if "alb" in p or "load balancer" in p or "node-alb" in p:
         return (
             "### ⚖️ AWS Application Load Balancer (ALB) Diagnostics\n\n"
             "**Resource:** `Prod ALB (node-alb)` | **Region:** `eu-north-1`\n\n"
             "#### 📊 Ingress Metrics & Health Summary:\n"
-            "- **Listener:** `HTTP:80` -> `HTTPS:443` (HTTP/2 enabled)\n"
+            "- **Protocol/Port:** `HTTP:80` -> `HTTPS:443` (HTTP/2 enabled)\n"
             "- **Target Group:** `target-group/tg-prod-app`\n"
-            "- **Recent Latency Telemetry:** Response time spike detected (`avg 310ms`)\n\n"
+            "- **Latency Telemetry:** Ingress spike monitored (`avg 310ms`)\n\n"
             "#### 🛠️ ALB Diagnostic AWS CLI Commands:\n"
             "```bash\n"
             "# 1. Describe ALB target health states\n"
@@ -778,41 +799,71 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "  --metric-name HTTPCode_Target_5XX_Count --dimensions Name=LoadBalancer,Value=app/prod-alb \\\n"
             "  --start-time $(date -u -d '1 hour ago' +\%Y-\%m-\%dT\%H:\%M:\%SZ) --end-time$(date -u +%Y-%m-%dT%H:%M:%SZ) \\\n"
             "  --period 300 --statistics Sum\n\n"
-            "# 3. Verify ALB security group listener rules\n"
+            "# 3. Verify ALB listener routing rules\n"
             "aws elbv2 describe-listeners --load-balancer-arn <load-balancer-arn>\n"
             "```"
         )
 
-    # CloudWatch Alarms / Incidents
-    if "alarm" in p or "incident" in p or "triag" in p:
-        alarms_str = "\n".join([f"- `{a}`" for a in incident_ctx.get("active_alarms", [])])
-        errors_str = "\n".join([f"- `{err}`" for err in incident_ctx.get("recent_error_logs", [])])
+    # 3. RDS / Database Diagnosis
+    if "rds" in p or "aurora" in p or "database" in p or "node-rds" in p:
         return (
-            "### 🚨 CloudWatch Incident & Alarm Diagnostics\n\n"
-            f"**Infrastructure Health Status:** `{analysis['score']}/100` ({analysis['status']})\n\n"
-            "#### 📊 Active CloudWatch Alarms:\n"
-            f"{alarms_str}\n\n"
-            "#### 🔍 Correlated Error Trace Patterns:\n"
-            f"{errors_str}\n\n"
-            "#### 🛠️ SRE Incident Triage Runbook:\n"
+            "### 🗄️ Amazon RDS / Aurora PostgreSQL Diagnostics\n\n"
+            "**Resource:** `RDS Aurora (node-rds)` | **Region:** `eu-north-1b`\n\n"
+            "#### 📊 Database Cluster Telemetry:\n"
+            "- **Engine:** Aurora PostgreSQL 15.4 (Multi-AZ)\n"
+            "- **Replication Lag:** `< 12ms` (Healthy)\n"
+            "- **Connection Pool:** `42/200 active connections`\n\n"
+            "#### 🛠️ Database Diagnostic Commands:\n"
             "```bash\n"
-            "# Inspect alarm history in AWS CloudWatch\n"
-            "aws cloudwatch describe-alarm-history --alarm-name <alarm-name> --max-items 5\n\n"
-            "# Query live CloudWatch Logs for error spikes\n"
-            "aws logs filter-log-events --log-group-name /aws/ec2/system --filter-pattern 'ERROR' --limit 10\n"
+            "# 1. Describe RDS DB instance status\n"
+            "aws rds describe-db-instances --db-instance-identifier prod-rds-aurora\n\n"
+            "# 2. Query CloudWatch for database connection count\n"
+            "aws cloudwatch get-metric-statistics --namespace AWS/RDS --metric-name DatabaseConnections \\\n"
+            "  --dimensions Name=DBInstanceIdentifier,Value=prod-rds-aurora \\\n"
+            "  --start-time $(date -u -d '30 mins ago' +\%Y-\%m-\%dT\%H:\%M:\%SZ) --end-time$(date -u +%Y-%m-%dT%H:%M:%SZ) \\\n"
+            "  --period 300 --statistics Average\n"
             "```"
         )
 
-    # High CPU Incident
+    # 4. CloudFront CDN Diagnosis
+    if "cloudfront" in p or "cdn" in p or "node-cf" in p:
+        return (
+            "### 🌐 Amazon CloudFront CDN Edge Diagnostics\n\n"
+            "**Resource:** `CloudFront CDN (node-cf)` | **Region:** `Global Edge`\n\n"
+            "#### 📊 Edge Cache Telemetry:\n"
+            "- **Cache Hit Ratio:** `94.2%`\n"
+            "- **Edge Locations:** Active worldwide distribution\n"
+            "- **Origin Target:** `Prod ALB (node-alb)`\n\n"
+            "#### 🛠️ CDN Diagnostic CLI Commands:\n"
+            "```bash\n"
+            "# 1. Describe CloudFront distribution configuration\n"
+            "aws cloudfront list-distributions --query 'DistributionList.Items[*].{Id:Id,DomainName:DomainName,Status:Status}'\n\n"
+            "# 2. Invalidate cache if serving stale assets\n"
+            "aws cloudfront create-invalidation --distribution-id <dist-id> --paths '/*'\n"
+            "```"
+        )
+
+    # 5. Global Clients / Internet Gateway Diagnosis
+    if "client" in p or "internet" in p or "node-internet" in p:
+        return (
+            "### 🌍 Global Ingress Traffic Diagnostics\n\n"
+            "**Resource:** `Global Clients (node-internet)`\n\n"
+            "#### 📊 Ingress Telemetry:\n"
+            "- **Throughput Rate:** `~1,420 req/s`\n"
+            "- **Status:** Normal traffic distribution\n"
+            "- **DDoS Protection:** AWS Shield Standard Active"
+        )
+
+    # 6. High CPU Spikes & Incidents
     if "cpu" in p or "spike" in p or "mitigat" in p:
         return (
             "### 🚨 Production Incident Runbook: High CPU Mitigation\n\n"
             f"**Infrastructure Health Status:** `{analysis['score']}/100` ({analysis['status']})\n\n"
-            "#### 🛠️ Tier 1: Immediate Diagnostics (Identify Offending PIDs)\n"
+            "#### 🛠️ Tier 1: Immediate Diagnostics\n"
             "```bash\n"
             "# Find top CPU-consuming processes\n"
             "ps aux --sort=-%cpu | head -n 6\n\n"
-            "# Inspect kernel dmesg for thread locks or OOM\n"
+            "# Inspect kernel logs\n"
             "dmesg -T | tail -n 20\n"
             "```\n\n"
             "#### ⚡ Tier 2: Containment & Remediation\n"
@@ -822,43 +873,40 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "# Terminate runaway worker\n"
             "kill -15 <PID>\n"
             "```\n\n"
-            "#### 📈 Tier 3: Scalability & Prevention\n"
+            "#### 📈 Tier 3: Scalability\n"
             "```bash\n"
             "# Scale Auto Scaling Group capacity\n"
             "aws autoscaling set-desired-capacity --auto-scaling-group-name prod-api-asg --desired-capacity 4\n"
             "```"
         )
 
-    # EC2 Instances
+    # 7. EC2 Instances
     if "ec2" in p or "instance" in p or "server" in p:
         return (
             "### 🖥️ Amazon Elastic Compute Cloud (Amazon EC2)\n\n"
-            "Amazon EC2 provides scalable on-demand compute capacity in the AWS Cloud.\n\n"
             f"- **Your Monitored Fleet:** **{analysis['ec2_count']}** instance(s) registered in `eu-north-1`.\n"
             f"- **Current Host Workload:** CPU is at **{ctx['cpu']['percent']}%**, RAM is at **{ctx['memory']['percent']}%**.\n\n"
-            "#### 🛠️ Essential AWS CLI & Triage Commands:\n"
+            "#### 🛠️ Essential AWS CLI Commands:\n"
             "```bash\n"
-            "# List running EC2 instances with details\n"
+            "# List running EC2 instances\n"
             "aws ec2 describe-instances --filters 'Name=instance-state-name,Values=running' --output table\n\n"
-            "# Inspect instance system console log output\n"
-            "aws ec2 get-console-output --instance-id <instance-id>\n\n"
-            "# Safely reboot an EC2 instance via CLI\n"
-            "aws ec2 reboot-instances --instance-ids <instance-id>\n"
+            "# Get instance console logs\n"
+            "aws ec2 get-console-output --instance-id <instance-id>\n"
             "```"
         )
 
-    # General Fallback
+    # 8. Fallback
     top_proc = ctx.get('top_processes', [{}])[0]
     proc_name = top_proc.get('name', 'system')
     proc_cpu = top_proc.get('cpu_percent', 0.0)
     
     return (
         f"### 🤖 DevOps Copilot Advisory: \"{prompt}\"\n\n"
-        f"**Live Telemetry & CloudWatch Context ({analysis['status']}):**\n"
+        f"**Live Telemetry Snapshot ({analysis['status']}):**\n"
         f"- **Health Index:** `{analysis['score']}/100` | **CPU:** `{ctx['cpu']['percent']}%` | **RAM:** `{ctx['memory']['percent']}%`\n"
         f"- **Top Monitored Process:** `{proc_name}` (`{proc_cpu}% CPU`)\n"
-        f"- **Cloud Inventory:** `{analysis['ec2_count']}` EC2 instances in `eu-north-1`.\n"
-        f"- **CloudWatch Alarms:** `{len(incident_ctx.get('active_alarms', []))}` tracked."
+        f"- **Cloud Inventory:** `{analysis['ec2_count']} EC2 instances` in `eu-north-1`.\n"
+        f"- **CloudWatch Alarms:** `{len(incident_ctx.get('active_alarms', []))} active`."
     )
 
 @app.post("/chat")
@@ -869,13 +917,13 @@ async def chat(request: ChatRequest):
     live_logs = get_logs(limit=10)
     incident_ctx = query_cloudwatch_incident_context()
 
-    # Format live process list explicitly for the LLM
+    # Format live process list
     top_procs_list = "\n".join([
         f"  - PID {p['pid']} ({p['name']}): CPU {p['cpu_percent']}%, RAM {p['memory_percent']}% (Status: {p['status']})"
         for p in live_ctx.get("top_processes", [])
     ])
 
-    # Format EC2 instances explicitly for the LLM
+    # Format EC2 instances
     ec2_items = live_ec2.get("items", [])
     running_ec2 = [inst for inst in ec2_items if inst.get("status", "").lower() == "running"]
     ec2_list = "\n".join([
@@ -906,19 +954,25 @@ Live Telemetry Context:
 {context_str}
 
 RESOURCE-SPECIFIC DIAGNOSTIC RULES:
-1. When asked to explain or diagnose a Load Balancer (ALB / node-alb):
-   - Explain that ALB is a managed AWS reverse proxy balancing traffic across target groups.
-   - Provide AWS CLI diagnostic commands for ALB Target Health (`aws elbv2 describe-target-health`), 5XX/4XX CloudWatch metrics, and listener rules.
-   - Do NOT provide Linux host commands (like ps aux or kill) for managed ALBs.
+1. When asked about S3 Storage (node-s3):
+   - Explain that S3 is high-durability cloud object storage.
+   - Provide AWS CLI commands to list buckets (`aws s3 ls`), inspect sizes (`aws s3 ls s3://<bucket> --summarize`), and check encryption policies.
 
-2. When asked to mitigate Host CPU Spikes or Server Incidents:
-   - Provide the 3-tier runbook: Tier 1 (`ps aux`, `dmesg`), Tier 2 (`systemctl restart`, `kill -15`), Tier 3 (`aws autoscaling set-desired-capacity`).
+2. When asked about ALB / Load Balancers (node-alb):
+   - Explain ALB HTTP reverse proxy routing.
+   - Provide AWS CLI commands for Target Health (`aws elbv2 describe-target-health`) and CloudWatch 5XX/4XX error queries.
 
-3. When asked about EC2 instances, state the exact count ({len(running_ec2)} running) and list them from the snapshot.
+3. When asked about RDS / Aurora (node-rds):
+   - Explain PostgreSQL database tier metrics, connection pools, and `aws rds describe-db-instances`.
 
-4. For general knowledge and programming questions, answer factually and concisely."""
+4. When asked about CloudFront (node-cf):
+   - Explain global edge caching hit ratios and cache invalidation commands (`aws cloudfront create-invalidation`).
 
-    # Build full message history for multi-turn chat
+5. When asked to mitigate Host CPU Spikes or Server Incidents:
+   - Provide the 3-tier runbook: Tier 1 (`ps aux`), Tier 2 (`systemctl restart`), Tier 3 (`aws autoscaling set-desired-capacity`).
+
+6. When asked about EC2 instances, state the exact count ({len(running_ec2)} running) and list them from the snapshot."""
+
     messages_payload = [{"role": "system", "content": system_prompt}]
     if request.history:
         for msg in request.history:
@@ -927,7 +981,7 @@ RESOURCE-SPECIFIC DIAGNOSTIC RULES:
 
     # 1. Query Self-Hosted Ollama API
     try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
+        async with httpx.AsyncClient(timeout=4.0) as client:
             ollama_payload = {
                 "model": OLLAMA_MODEL,
                 "messages": messages_payload,
@@ -947,9 +1001,9 @@ RESOURCE-SPECIFIC DIAGNOSTIC RULES:
                         "model": OLLAMA_MODEL
                     }
     except Exception as e:
-        print(f"⚠️ Remote Ollama connection offline or timed out: {e}")
+        print(f"⚠️ Remote Ollama timeout or fallback: {e}")
 
-    # 2. Rule-based SRE Copilot Fallback
+    # 2. Rule-based SRE Copilot Fallback (Instant Response)
     mode = "beginner" if ("simple" in request.message.lower() or "new to aws" in request.message.lower()) else "engineer"
     fallback_reply = generate_copilot_response(request.message, mode, live_ctx, live_ec2, live_anom, live_logs, incident_ctx)
     return {
