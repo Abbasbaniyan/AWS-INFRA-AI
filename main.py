@@ -897,6 +897,12 @@ async def chat(request: ChatRequest):
     live_logs = get_logs(limit=10)
     incident_ctx = query_cloudwatch_incident_context()
 
+    # Format live process list explicitly for the LLM
+    top_procs_list = "\n".join([
+        f"  - PID {p['pid']} ({p['name']}): CPU {p['cpu_percent']}%, RAM {p['memory_percent']}% (Status: {p['status']})"
+        for p in live_ctx.get("top_processes", [])
+    ])
+
     context_str = f"""
 LIVE INFRASTRUCTURE & CLOUDWATCH INCIDENT SNAPSHOT:
 - Region: eu-north-1
@@ -905,6 +911,8 @@ LIVE INFRASTRUCTURE & CLOUDWATCH INCIDENT SNAPSHOT:
 - Memory Allocation: {live_ctx['memory']['percent']}% ({live_ctx['memory']['used_gb']}GB used / {live_ctx['memory']['total_gb']}GB total)
 - Disk Headroom: {live_ctx['disk']['percent']}% used
 - EC2 Inventory: {len(live_ec2.get('items', []))} instances active
+- Active Top Processes on Host:
+{top_procs_list}
 - CloudWatch Triggered Alarms: {incident_ctx['active_alarms']}
 - Correlated Log Errors: {incident_ctx['recent_error_logs']}
 - Active Anomaly Alerts: {len(live_anom.get('anomalies', []))} detected
@@ -915,9 +923,10 @@ You have real-time access to live infrastructure telemetry:
 {context_str}
 
 Guidelines:
-1. When asked about DevOps, AWS, cloud infrastructure, alarms, or metrics, provide expert analysis, root-cause diagnostics, and actionable bash/AWS CLI commands in markdown code blocks.
-2. When asked general knowledge, programming, or everyday conversational questions, answer them accurately, helpfully, and concisely without refusing.
-3. Keep answers clear, structured, and easy to read."""
+1. When asked about resource usage, top processes, or bottlenecks, cite the exact process name, PID, CPU%, and RAM% directly from the telemetry snapshot above.
+2. When asked about DevOps, AWS, cloud infrastructure, alarms, or metrics, provide expert root-cause analysis and actionable bash/AWS CLI commands in markdown code blocks.
+3. When asked general knowledge, programming, or everyday conversational questions, answer them accurately, helpfully, and concisely without refusing.
+4. Keep answers clear, structured, and easy to read."""
 
     # Build full message history for multi-turn chat
     messages_payload = [{"role": "system", "content": system_prompt}]
