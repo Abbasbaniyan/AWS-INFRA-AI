@@ -760,22 +760,34 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
     logs = log_data.get("logs", [])
     analysis = analyze_infra_state(ctx, ec2_items, anomalies, logs)
     
-    if "alarm" in p or "incident" in p or "troubleshoot" in p or "triag" in p:
+    if "alarm" in p or "incident" in p or "troubleshoot" in p or "triag" in p or "cpu" in p or "spike" in p or "mitigat" in p:
         alarms_str = "\n".join([f"- `{a}`" for a in incident_ctx.get("active_alarms", [])])
         errors_str = "\n".join([f"- `{err}`" for err in incident_ctx.get("recent_error_logs", [])])
         return (
-            "### 🚨 CloudWatch Incident & Alarm Diagnostics\n\n"
+            "### 🚨 Production Incident Runbook: High CPU Mitigation\n\n"
             f"**Infrastructure Health Status:** `{analysis['score']}/100` ({analysis['status']})\n\n"
             "#### 📊 Active CloudWatch Alarms:\n"
             f"{alarms_str}\n\n"
             "#### 🔍 Correlated Error Trace Patterns:\n"
             f"{errors_str}\n\n"
-            "#### 🛠️ SRE Incident Triage Runbook:\n"
+            "#### 🛠️ Tier 1: Immediate Diagnostics (Identify Offending PIDs)\n"
             "```bash\n"
-            "# Inspect alarm history in AWS CloudWatch\n"
-            "aws cloudwatch describe-alarm-history --alarm-name <alarm-name> --max-items 5\n\n"
-            "# Query live CloudWatch Logs for error spikes\n"
-            "aws logs filter-log-events --log-group-name /aws/ec2/system --filter-pattern 'ERROR' --limit 10\n"
+            "# 1. Find top CPU-consuming processes\n"
+            "ps aux --sort=-%cpu | head -n 6\n\n"
+            "# 2. Inspect kernel dmesg for thread locks or OOM\n"
+            "dmesg -T | tail -n 20\n"
+            "```\n\n"
+            "#### ⚡ Tier 2: Containment & Remediation\n"
+            "```bash\n"
+            "# 1. Recycle the saturated application or proxy service\n"
+            "sudo systemctl restart nginx\n\n"
+            "# 2. Safely terminate runaway worker thread\n"
+            "kill -15 <PID>\n"
+            "```\n\n"
+            "#### 📈 Tier 3: Horizontal Auto-Scaling\n"
+            "```bash\n"
+            "# Scale Auto Scaling Group capacity to relieve production load\n"
+            "aws autoscaling set-desired-capacity --auto-scaling-group-name prod-api-asg --desired-capacity 4\n"
             "```"
         )
 
@@ -927,18 +939,35 @@ LIVE INFRASTRUCTURE & CLOUDWATCH INCIDENT SNAPSHOT:
 - Active Anomaly Alerts: {len(live_anom.get('anomalies', []))} detected
 """
 
-    system_prompt = f"""You are CloudOps AI SRE, an expert Site Reliability Engineer and AI infrastructure assistant.
+    system_prompt = f"""You are CloudOps AI SRE, an expert Site Reliability Engineer.
 
 Live Telemetry Context:
 {context_str}
 
-OPERATIONAL RESPONSE STANDARDS:
-1. When asked about high CPU spikes, memory leaks, or incident mitigation, ALWAYS structure your answer into 3 actionable tiers:
-   - Tier 1: Immediate Diagnostic Commands (e.g., `ps aux --sort=-%cpu | head -n 6`, `top -b -n 1`, `dmesg -T | tail -n 20`).
-   - Tier 2: Stabilization & Containment (e.g., `sudo systemctl restart <service>`, `kill -15 <PID>`).
-   - Tier 3: Scalability & Prevention (e.g., Auto Scaling Group updates `aws autoscaling set-desired-capacity`, instance type rightsizing, optimizing DB query pools). Never recommend `taskset` for multi-instance load balancing.
-2. When asked about EC2 instances or telemetry, state the exact running count and instance IDs from the snapshot above.
-3. For general knowledge and programming questions, answer factually, clearly, and concisely without refusing."""
+CRITICAL RULES:
+1. Never invent fake commands (e.g. modify-instance-memory is fake and prohibited).
+2. When asked to mitigate high CPU spikes or incidents, ALWAYS output exactly this structured runbook format:
+
+### 🚨 Tier 1: Immediate Diagnostics
+- Check top CPU processes:
+  `ps aux --sort=-%cpu | head -n 6`
+- Inspect kernel logs for stalls:
+  `dmesg -T | tail -n 20`
+
+### ⚡ Tier 2: Containment & Remediation
+- Safely recycle service:
+  `sudo systemctl restart nginx`
+- Terminate offending worker:
+  `kill -15 <PID>`
+
+### 📈 Tier 3: Scalability & Prevention
+- Scale Auto Scaling Group capacity:
+  `aws autoscaling set-desired-capacity --auto-scaling-group-name prod-api-asg --desired-capacity 4`
+- Resize EC2 instance type (requires stop):
+  `aws ec2 modify-instance-attribute --instance-id <instance-id> --instance-type "{{\"Value\": \"c6i.2xlarge\"}}"`
+
+3. When asked about running EC2 instances, state the exact count ({len(running_ec2)} running) and list them from the snapshot.
+4. Answer general knowledge and programming questions factually and concisely without refusing."""
 
     # Build full message history for multi-turn chat
     messages_payload = [{"role": "system", "content": system_prompt}]
@@ -955,7 +984,7 @@ OPERATIONAL RESPONSE STANDARDS:
                 "messages": messages_payload,
                 "stream": False,
                 "options": {
-                    "temperature": 0.3,
+                    "temperature": 0.2,
                     "num_ctx": 4096
                 }
             }
