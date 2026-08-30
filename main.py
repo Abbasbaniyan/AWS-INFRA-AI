@@ -626,10 +626,10 @@ def get_topology():
         "nodes": [
             {"id": "node-internet", "label": "Global Clients", "type": "internet", "status": "healthy", "region": "Worldwide", "x": 60, "y": 160, "details": "Incoming client traffic: 1,420 req/s"},
             {"id": "node-cf", "label": "CloudFront CDN", "type": "cloudfront", "status": "healthy", "region": "Global Edge", "x": 160, "y": 160, "details": "Edge caching active. Hit ratio: 94.2%"},
-            {"id": "node-alb", "label": "Prod ALB", "type": "alb", "status": "healthy", "region": "us-east-1", "x": 270, "y": 160, "details": "HTTP/2 listener active (target-group/prod-app)"},
-            {"id": "node-ec2", "label": "EC2 Cluster", "type": "ec2", "status": "healthy", "region": "us-east-1a", "x": 390, "y": 90, "details": "Fleet Auto-Scaling Group (3 instances online)"},
-            {"id": "node-rds", "label": "RDS Aurora", "type": "rds", "status": "healthy", "region": "us-east-1b", "x": 510, "y": 90, "details": "Multi-AZ PostgreSQL cluster healthy"},
-            {"id": "node-s3", "label": "S3 Bucket", "type": "s3", "status": "healthy", "region": "us-east-1", "x": 390, "y": 230, "details": "Assets vault with AES-256 server-side encryption"}
+            {"id": "node-alb", "label": "Prod ALB", "type": "alb", "status": "healthy", "region": "eu-north-1", "x": 270, "y": 160, "details": "HTTP/2 listener active (target-group/tg-prod-app)"},
+            {"id": "node-ec2", "label": "EC2 Cluster", "type": "ec2", "status": "healthy", "region": "eu-north-1a", "x": 390, "y": 90, "details": "Active EC2 fleet connected"},
+            {"id": "node-rds", "label": "RDS Aurora", "type": "rds", "status": "healthy", "region": "eu-north-1b", "x": 510, "y": 90, "details": "Multi-AZ PostgreSQL cluster healthy"},
+            {"id": "node-s3", "label": "S3 Storage", "type": "s3", "status": "healthy", "region": "eu-north-1", "x": 390, "y": 230, "details": "Assets storage bucket active"}
         ],
         "links": [
             {"source": "node-internet", "target": "node-cf"},
@@ -760,46 +760,77 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
     logs = log_data.get("logs", [])
     analysis = analyze_infra_state(ctx, ec2_items, anomalies, logs)
     
-    if "alarm" in p or "incident" in p or "troubleshoot" in p or "triag" in p or "cpu" in p or "spike" in p or "mitigat" in p:
+    # ALB / Load Balancer Diagnosis
+    if "alb" in p or "load balancer" in p or "node-alb" in p:
+        return (
+            "### ⚖️ AWS Application Load Balancer (ALB) Diagnostics\n\n"
+            "**Resource:** `Prod ALB (node-alb)` | **Region:** `eu-north-1`\n\n"
+            "#### 📊 Ingress Metrics & Health Summary:\n"
+            "- **Listener:** `HTTP:80` -> `HTTPS:443` (HTTP/2 enabled)\n"
+            "- **Target Group:** `target-group/tg-prod-app`\n"
+            "- **Recent Latency Telemetry:** Response time spike detected (`avg 310ms`)\n\n"
+            "#### 🛠️ ALB Diagnostic AWS CLI Commands:\n"
+            "```bash\n"
+            "# 1. Describe ALB target health states\n"
+            "aws elbv2 describe-target-health --target-group-arn <target-group-arn>\n\n"
+            "# 2. Check 5XX and 4XX error metrics on CloudWatch\n"
+            "aws cloudwatch get-metric-statistics --namespace AWS/ApplicationELB \\\n"
+            "  --metric-name HTTPCode_Target_5XX_Count --dimensions Name=LoadBalancer,Value=app/prod-alb \\\n"
+            "  --start-time $(date -u -d '1 hour ago' +\%Y-\%m-\%dT\%H:\%M:\%SZ) --end-time$(date -u +%Y-%m-%dT%H:%M:%SZ) \\\n"
+            "  --period 300 --statistics Sum\n\n"
+            "# 3. Verify ALB security group listener rules\n"
+            "aws elbv2 describe-listeners --load-balancer-arn <load-balancer-arn>\n"
+            "```"
+        )
+
+    # CloudWatch Alarms / Incidents
+    if "alarm" in p or "incident" in p or "triag" in p:
         alarms_str = "\n".join([f"- `{a}`" for a in incident_ctx.get("active_alarms", [])])
         errors_str = "\n".join([f"- `{err}`" for err in incident_ctx.get("recent_error_logs", [])])
         return (
-            "### 🚨 Production Incident Runbook: High CPU Mitigation\n\n"
+            "### 🚨 CloudWatch Incident & Alarm Diagnostics\n\n"
             f"**Infrastructure Health Status:** `{analysis['score']}/100` ({analysis['status']})\n\n"
             "#### 📊 Active CloudWatch Alarms:\n"
             f"{alarms_str}\n\n"
             "#### 🔍 Correlated Error Trace Patterns:\n"
             f"{errors_str}\n\n"
+            "#### 🛠️ SRE Incident Triage Runbook:\n"
+            "```bash\n"
+            "# Inspect alarm history in AWS CloudWatch\n"
+            "aws cloudwatch describe-alarm-history --alarm-name <alarm-name> --max-items 5\n\n"
+            "# Query live CloudWatch Logs for error spikes\n"
+            "aws logs filter-log-events --log-group-name /aws/ec2/system --filter-pattern 'ERROR' --limit 10\n"
+            "```"
+        )
+
+    # High CPU Incident
+    if "cpu" in p or "spike" in p or "mitigat" in p:
+        return (
+            "### 🚨 Production Incident Runbook: High CPU Mitigation\n\n"
+            f"**Infrastructure Health Status:** `{analysis['score']}/100` ({analysis['status']})\n\n"
             "#### 🛠️ Tier 1: Immediate Diagnostics (Identify Offending PIDs)\n"
             "```bash\n"
-            "# 1. Find top CPU-consuming processes\n"
+            "# Find top CPU-consuming processes\n"
             "ps aux --sort=-%cpu | head -n 6\n\n"
-            "# 2. Inspect kernel dmesg for thread locks or OOM\n"
+            "# Inspect kernel dmesg for thread locks or OOM\n"
             "dmesg -T | tail -n 20\n"
             "```\n\n"
             "#### ⚡ Tier 2: Containment & Remediation\n"
             "```bash\n"
-            "# 1. Recycle the saturated application or proxy service\n"
+            "# Recycle application service\n"
             "sudo systemctl restart nginx\n\n"
-            "# 2. Safely terminate runaway worker thread\n"
+            "# Terminate runaway worker\n"
             "kill -15 <PID>\n"
             "```\n\n"
-            "#### 📈 Tier 3: Horizontal Auto-Scaling\n"
+            "#### 📈 Tier 3: Scalability & Prevention\n"
             "```bash\n"
-            "# Scale Auto Scaling Group capacity to relieve production load\n"
+            "# Scale Auto Scaling Group capacity\n"
             "aws autoscaling set-desired-capacity --auto-scaling-group-name prod-api-asg --desired-capacity 4\n"
             "```"
         )
 
+    # EC2 Instances
     if "ec2" in p or "instance" in p or "server" in p:
-        if mode == "beginner" or "simple" in p or "new to aws" in p:
-            return (
-                "### 🖥️ What is an EC2 Instance? (Simple Explanation)\n\n"
-                "Think of an **Amazon EC2 instance** like a **laptop running in an Amazon data center** that you control through the internet.\n\n"
-                f"- **Your Active Fleet:** You currently have **{analysis['ec2_count']}** virtual server(s) running.\n"
-                f"- **How Hard It's Working:** CPU is at **{ctx['cpu']['percent']}%**, and RAM is at **{ctx['memory']['percent']}%**.\n\n"
-                "> 💡 **Analogy:** If your home laptop gets hot with 50 browser tabs open, that is high CPU. EC2 works the exact same way!"
-            )
         return (
             "### 🖥️ Amazon Elastic Compute Cloud (Amazon EC2)\n\n"
             "Amazon EC2 provides scalable on-demand compute capacity in the AWS Cloud.\n\n"
@@ -813,74 +844,10 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
             "aws ec2 get-console-output --instance-id <instance-id>\n\n"
             "# Safely reboot an EC2 instance via CLI\n"
             "aws ec2 reboot-instances --instance-ids <instance-id>\n"
-            "```\n\n"
-            "#### 💡 SRE Best Practice:\n"
-            "Always attach an **IAM Instance Profile** for role-based permissions instead of hardcoding API keys on instances."
-        )
-
-    if "vpc" in p or "network" in p or "subnet" in p:
-        return (
-            "### 🌐 Amazon Virtual Private Cloud (Amazon VPC)\n\n"
-            "Amazon VPC provisions a logically isolated section of the AWS Cloud where you launch AWS resources in a virtual network you define.\n\n"
-            "- **Key Components:** Subnets (Public with IGW, Private with NAT Gateway), Route Tables, and Internet Gateways.\n"
-            "- **Security Controls:** Security Groups (stateful firewall at instance level) and Network ACLs (stateless at subnet level).\n\n"
-            "```bash\n"
-            "# List active VPCs\n"
-            "aws ec2 describe-vpcs --output table\n\n"
-            "# Inspect subnets in a VPC\n"
-            "aws ec2 describe-subnets --filters 'Name=vpc-id,Values=<vpc-id>'\n"
             "```"
         )
 
-    if "s3" in p or "bucket" in p or "storage" in p:
-        return (
-            "### 🪣 Amazon Simple Storage Service (Amazon S3)\n\n"
-            "Amazon S3 is high-durability object storage for backups, static assets, and data lakes.\n\n"
-            "```bash\n"
-            "# List all S3 buckets\n"
-            "aws s3 ls\n\n"
-            "# Check bucket size aggregate\n"
-            "aws s3 ls s3://<bucket-name> --recursive --human-readable --summarize\n"
-            "```"
-        )
-
-    if "health" in p or "what's wrong" in p or "why is my infrastructure" in p or "analyze" in p:
-        if not analysis['issues']:
-            return (
-                "### 🟢 Infrastructure Telemetry: All Systems Nominal\n\n"
-                f"**Health Score:** `100/100` | **Status:** `OPTIMAL`\n\n"
-                "- **Telemetry:** Host CPU, Memory, and Disk allocations are within standard baseline (<70%).\n"
-                f"- **Inventory Fleet:** `{analysis['ec2_count']}` EC2 instances online.\n"
-                "- **Anomaly Engine:** 0 critical alerts active."
-            )
-        
-        top = analysis['issues'][0]
-        return (
-            f"### 🚨 Infrastructure Health Analysis ({analysis['score']}/100 - {analysis['status']})\n\n"
-            f"**Primary Bottleneck Identified:** `{top['target']}` at `{top['metric']}`\n\n"
-            f"#### 🔍 Root Cause Analysis (RCA):\n"
-            f"- **Confidence:** `HIGH (94%)`\n"
-            f"- **Evidence:** Telemetry flags `{top['target']}` above threshold. Active alerts: `{analysis['anomaly_count']}`.\n"
-            f"- **Impact:** {top['impact']}.\n\n"
-            "#### 🛠️ Immediate Triaging Commands:\n"
-            "```bash\n"
-            "# 1. Profile top resource consuming processes\n"
-            "ps aux --sort=-%cpu,-%mem | head -n 8\n\n"
-            "# 2. Inspect kernel dmesg for OOM or CPU stalls\n"
-            "dmesg -T | tail -n 20\n"
-            "```"
-        )
-
-    if "fix" in p or "priorit" in p or "action" in p:
-        if not analysis['issues']:
-            return "### ✅ No Action Required: Infrastructure is running within optimal operating limits."
-            
-        res = "### 📋 Prioritized SRE Incident Action Plan\n\n"
-        for idx, issue in enumerate(analysis['issues'], 1):
-            res += f"**{idx}. [{issue['priority']}] {issue['target']}** (`{issue['metric']}`)\n- *Impact:* {issue['impact']}\n\n"
-        res += "#### 🛠️ Recommended Sequence: Resolve P1 items first to eliminate immediate latency spikes."
-        return res
-
+    # General Fallback
     top_proc = ctx.get('top_processes', [{}])[0]
     proc_name = top_proc.get('name', 'system')
     proc_cpu = top_proc.get('cpu_percent', 0.0)
@@ -891,13 +858,7 @@ def generate_copilot_response(prompt: str, mode: str, ctx: Dict[str, Any], ec2_d
         f"- **Health Index:** `{analysis['score']}/100` | **CPU:** `{ctx['cpu']['percent']}%` | **RAM:** `{ctx['memory']['percent']}%`\n"
         f"- **Top Monitored Process:** `{proc_name}` (`{proc_cpu}% CPU`)\n"
         f"- **Cloud Inventory:** `{analysis['ec2_count']}` EC2 instances in `eu-north-1`.\n"
-        f"- **CloudWatch Alarms:** `{len(incident_ctx.get('active_alarms', []))}` tracked.\n\n"
-        "#### 💡 Suggested Inquiries:\n"
-        "- `Troubleshoot active CloudWatch alarms`\n"
-        "- `What is EC2?`\n"
-        "- `What is VPC?`\n"
-        "- `Explain my health`\n"
-        "- `What should I fix first?`"
+        f"- **CloudWatch Alarms:** `{len(incident_ctx.get('active_alarms', []))}` tracked."
     )
 
 @app.post("/chat")
@@ -944,30 +905,18 @@ LIVE INFRASTRUCTURE & CLOUDWATCH INCIDENT SNAPSHOT:
 Live Telemetry Context:
 {context_str}
 
-CRITICAL RULES:
-1. Never invent fake commands (e.g. modify-instance-memory is fake and prohibited).
-2. When asked to mitigate high CPU spikes or incidents, ALWAYS output exactly this structured runbook format:
+RESOURCE-SPECIFIC DIAGNOSTIC RULES:
+1. When asked to explain or diagnose a Load Balancer (ALB / node-alb):
+   - Explain that ALB is a managed AWS reverse proxy balancing traffic across target groups.
+   - Provide AWS CLI diagnostic commands for ALB Target Health (`aws elbv2 describe-target-health`), 5XX/4XX CloudWatch metrics, and listener rules.
+   - Do NOT provide Linux host commands (like ps aux or kill) for managed ALBs.
 
-### 🚨 Tier 1: Immediate Diagnostics
-- Check top CPU processes:
-  `ps aux --sort=-%cpu | head -n 6`
-- Inspect kernel logs for stalls:
-  `dmesg -T | tail -n 20`
+2. When asked to mitigate Host CPU Spikes or Server Incidents:
+   - Provide the 3-tier runbook: Tier 1 (`ps aux`, `dmesg`), Tier 2 (`systemctl restart`, `kill -15`), Tier 3 (`aws autoscaling set-desired-capacity`).
 
-### ⚡ Tier 2: Containment & Remediation
-- Safely recycle service:
-  `sudo systemctl restart nginx`
-- Terminate offending worker:
-  `kill -15 <PID>`
+3. When asked about EC2 instances, state the exact count ({len(running_ec2)} running) and list them from the snapshot.
 
-### 📈 Tier 3: Scalability & Prevention
-- Scale Auto Scaling Group capacity:
-  `aws autoscaling set-desired-capacity --auto-scaling-group-name prod-api-asg --desired-capacity 4`
-- Resize EC2 instance type (requires stop):
-  `aws ec2 modify-instance-attribute --instance-id <instance-id> --instance-type "{{\"Value\": \"c6i.2xlarge\"}}"`
-
-3. When asked about running EC2 instances, state the exact count ({len(running_ec2)} running) and list them from the snapshot.
-4. Answer general knowledge and programming questions factually and concisely without refusing."""
+4. For general knowledge and programming questions, answer factually and concisely."""
 
     # Build full message history for multi-turn chat
     messages_payload = [{"role": "system", "content": system_prompt}]
