@@ -8,7 +8,7 @@ pipeline {
         AWS_DEFAULT_REGION = 'eu-north-1'
         // Direct localhost communication via host network
         OLLAMA_BASE_URL    = 'http://127.0.0.1:11434'
-        OLLAMA_MODEL       = 'qwen2.5-coder:7b'
+        OLLAMA_MODEL       = 'qwen2.5-coder:1.5b'
     }
 
     stages {
