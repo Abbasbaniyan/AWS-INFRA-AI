@@ -5,8 +5,8 @@ pipeline {
         APP_NAME           = 'aws-infra-ai'
         IMAGE_NAME         = 'aws-infra-ai'
         CONTAINER_NAME     = 'aws-infra-ai-prod'
+        HOST_PORT          = '8000'
         AWS_DEFAULT_REGION = 'eu-north-1'
-        // Direct localhost communication via host network
         OLLAMA_BASE_URL    = 'http://127.0.0.1:11434'
         OLLAMA_MODEL       = 'qwen2.5-coder:1.5b'
     }
@@ -43,12 +43,10 @@ pipeline {
                     ).trim()
 
                     sh '''
-                        if [ $(docker ps -aq -f name=^/${CONTAINER_NAME}$) ]; then
-                            echo "Stopping existing container: ${CONTAINER_NAME}"
-                            docker stop ${CONTAINER_NAME} || true
-                            docker rm -f ${CONTAINER_NAME} || true
-                        fi
+                        echo "Cleaning up existing container if present..."
+                        docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
 
+                        echo "Starting application container in host network mode..."
                         docker run -d \
                             --name ${CONTAINER_NAME} \
                             --restart unless-stopped \
@@ -68,7 +66,7 @@ pipeline {
                     echo "Checking container health status..."
                     ATTEMPTS=0
                     MAX_ATTEMPTS=20
-                    HEALTH_URL="http://localhost:8000/health"
+                    HEALTH_URL="http://127.0.0.1:${HOST_PORT}/health"
 
                     until curl -s -f ${HEALTH_URL} > /dev/null; do
                         ATTEMPTS=$((ATTEMPTS+1))
@@ -86,6 +84,19 @@ pipeline {
             }
         }
 
+        stage('Pre-Warm Model') {
+            steps {
+                sh '''
+                    echo "Pre-warming Ollama model in RAM to prevent inference lag..."
+                    curl -s http://127.0.0.1:11434/api/generate -d '{
+                      "model": "'"${OLLAMA_MODEL}"'",
+                      "keep_alive": -1
+                    }' > /dev/null || true
+                    echo "Model is ready."
+                '''
+            }
+        }
+
         stage('Image Pruning') {
             steps {
                 sh 'docker image prune -f --filter "until=72h" || true'
@@ -98,8 +109,7 @@ pipeline {
             echo "Deployment failed. Rolling back..."
             sh '''
                 if [ -n "${PREV_IMAGE}" ]; then
-                    docker stop ${CONTAINER_NAME} || true
-                    docker rm -f ${CONTAINER_NAME} || true
+                    docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
                     docker run -d \
                         --name ${CONTAINER_NAME} \
                         --restart unless-stopped \
@@ -112,7 +122,7 @@ pipeline {
             '''
         }
         success {
-            echo "Deployment successful."
+            echo "Deployment successful on host network."
         }
     }
 }
