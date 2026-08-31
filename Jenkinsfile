@@ -5,11 +5,9 @@ pipeline {
         APP_NAME           = 'aws-infra-ai'
         IMAGE_NAME         = 'aws-infra-ai'
         CONTAINER_NAME     = 'aws-infra-ai-prod'
-        HOST_PORT          = '8000'
-        CONTAINER_PORT     = '8000'
         AWS_DEFAULT_REGION = 'eu-north-1'
-        // Docker host gateway configuration
-        OLLAMA_BASE_URL    = 'http://host.docker.internal:11434'
+        // Direct localhost communication via host network
+        OLLAMA_BASE_URL    = 'http://127.0.0.1:11434'
         OLLAMA_MODEL       = 'qwen2.5-coder:7b'
     }
 
@@ -54,8 +52,7 @@ pipeline {
                         docker run -d \
                             --name ${CONTAINER_NAME} \
                             --restart unless-stopped \
-                            --add-host=host.docker.internal:host-gateway \
-                            -p ${HOST_PORT}:${CONTAINER_PORT} \
+                            --network=host \
                             -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
                             -e OLLAMA_BASE_URL="${OLLAMA_BASE_URL}" \
                             -e OLLAMA_MODEL="${OLLAMA_MODEL}" \
@@ -71,7 +68,7 @@ pipeline {
                     echo "Checking container health status..."
                     ATTEMPTS=0
                     MAX_ATTEMPTS=20
-                    HEALTH_URL="http://localhost:${HOST_PORT}/health"
+                    HEALTH_URL="http://localhost:8000/health"
 
                     until curl -s -f ${HEALTH_URL} > /dev/null; do
                         ATTEMPTS=$((ATTEMPTS+1))
@@ -106,8 +103,7 @@ pipeline {
                     docker run -d \
                         --name ${CONTAINER_NAME} \
                         --restart unless-stopped \
-                        --add-host=host.docker.internal:host-gateway \
-                        -p ${HOST_PORT}:${CONTAINER_PORT} \
+                        --network=host \
                         -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
                         -e OLLAMA_BASE_URL="${OLLAMA_BASE_URL}" \
                         -e OLLAMA_MODEL="${OLLAMA_MODEL}" \
@@ -116,7 +112,7 @@ pipeline {
             '''
         }
         success {
-            echo "Deployment successful on port ${HOST_PORT}."
+            echo "Deployment successful."
         }
     }
 }
