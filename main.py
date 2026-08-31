@@ -774,9 +774,9 @@ async def chat(request: ChatRequest):
         "messages": messages_payload,
         "stream": False,
         "options": {
-            "temperature": 0.3,
-            "num_predict": 180,
-            "num_ctx": 1024,
+            "temperature": 0.2,
+            "num_predict": 80,
+            "num_ctx": 512,
             "num_thread": 2
         }
     }
