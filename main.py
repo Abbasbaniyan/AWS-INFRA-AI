@@ -2,11 +2,11 @@ import os
 import time
 import psutil
 import httpx
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from datetime import datetime
+from fastapi import FastAPI, Request, HTTPException, Query
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 app = FastAPI(title="AWS Infra AI - CloudOps Assistant")
 
@@ -15,10 +15,9 @@ AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "eu-north-1")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b")
 
-# High timeout for CPU-based local LLM execution
 HTTPX_TIMEOUT = httpx.Timeout(180.0, connect=10.0, read=180.0, write=30.0)
 
-# Serve frontend static assets
+# Serve static assets
 if os.path.isdir("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -36,36 +35,42 @@ def health_check():
     return {"status": "healthy", "region": AWS_DEFAULT_REGION}
 
 
+@app.get("/favicon.ico")
+def favicon():
+    if os.path.exists("static/favicon.ico"):
+        return FileResponse("static/favicon.ico")
+    return JSONResponse(status_code=204, content={})
+
+
 # ==========================================
-# DASHBOARD TELEMETRY & SYSTEM METRICS
+# EXACT MATCH ENDPOINTS FOR FRONTEND (app.js)
 # ==========================================
 
-@app.get("/api/metrics/system")
-def get_system_metrics():
+@app.get("/metrics")
+def get_dashboard_metrics():
     cpu_pct = psutil.cpu_percent(interval=None)
     cpu_count = psutil.cpu_count(logical=True) or 1
-    
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
     net_io = psutil.net_io_counters()
 
-    # Health score algorithm
-    score = int(100 - (cpu_pct * 0.4 + mem.percent * 0.4 + disk.percent * 0.2))
-    score = max(min(score, 100), 10)
+    # Weighted calculation
+    score = int(100 - (cpu_pct * 0.35 + mem.percent * 0.35 + disk.percent * 0.3))
+    score = max(min(score, 100), 15)
 
     return {
         "health_score": score,
-        "cpu_utilization": round(cpu_pct, 1),
+        "cpu_usage": round(cpu_pct, 1),
         "cpu_cores": cpu_count,
-        "memory_percent": round(mem.percent, 1),
+        "memory_usage": round(mem.percent, 1),
         "memory_used_gb": round(mem.used / (1024 ** 3), 2),
         "memory_total_gb": round(mem.total / (1024 ** 3), 2),
-        "disk_percent": round(disk.percent, 1),
+        "disk_usage": round(disk.percent, 1),
         "disk_used_gb": round(disk.used / (1024 ** 3), 2),
         "disk_total_gb": round(disk.total / (1024 ** 3), 2),
-        "bytes_sent_kb": round(net_io.bytes_sent / 1024, 1),
-        "bytes_recv_kb": round(net_io.bytes_recv / 1024, 1),
-        "fleet_cpu": round(cpu_pct * 0.85 + 5.0, 1),
+        "network_sent_kb": round(net_io.bytes_sent / 1024, 1),
+        "network_recv_kb": round(net_io.bytes_recv / 1024, 1),
+        "cloudwatch_fleet_cpu": round(cpu_pct * 0.8 + 4.5, 1),
         "uptime": "Live",
         "region": AWS_DEFAULT_REGION,
         "healthy_count": 14,
@@ -74,11 +79,11 @@ def get_system_metrics():
     }
 
 
-@app.get("/api/infra/topology")
-def get_infra_topology():
+@app.get("/api/topology")
+def get_topology():
     return {
         "nodes": [
-            {"id": "node-alb", "label": "Prod ALB", "type": "alb", "status": "healthy", "ip": "13.60.209.185"},
+            {"id": "node-alb", "label": "Prod ALB (node-alb)", "type": "alb", "status": "healthy", "ip": "13.60.209.185"},
             {"id": "node-app-1", "label": "App Cluster EC2", "type": "ec2", "status": "healthy", "ip": "172.31.23.67"},
             {"id": "node-db", "label": "Aurora MySQL Primary", "type": "rds", "status": "healthy", "ip": "172.31.40.12"},
             {"id": "node-s3", "label": "S3 Data Lake", "type": "s3", "status": "healthy", "bucket": "aws-infra-assets-prod"}
@@ -89,6 +94,30 @@ def get_infra_topology():
             {"from": "node-app-1", "to": "node-s3", "label": "IAM/S3"}
         ]
     }
+
+
+@app.get("/api/cloudwatch/ec2-metrics")
+def get_cloudwatch_metrics():
+    cpu_pct = psutil.cpu_percent(interval=None)
+    mem = psutil.virtual_memory()
+    return {
+        "status": "success",
+        "fleet_cpu": round(cpu_pct, 1),
+        "instances": [
+            {"instance_id": "i-09f1234a56b78c901", "name": "aws-infra-master", "cpu": round(cpu_pct, 1), "memory": round(mem.percent, 1), "status": "healthy"},
+            {"instance_id": "i-08a9876b54c32d102", "name": "aws-infra-worker", "cpu": round(cpu_pct * 0.9, 1), "memory": round(mem.percent * 0.85, 1), "status": "healthy"}
+        ]
+    }
+
+
+@app.get("/api/logs")
+def get_logs(level: Optional[str] = Query("ALL")):
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    return [
+        {"timestamp": timestamp, "level": "INFO", "service": "uvicorn", "message": "Telemetry collector poll successful."},
+        {"timestamp": timestamp, "level": "INFO", "service": "ollama", "message": "Inference server online on http://127.0.0.1:11434."},
+        {"timestamp": timestamp, "level": "INFO", "service": "cloudwatch", "message": "EC2 fleet CPU metric stream active."}
+    ]
 
 
 @app.get("/api/anomalies")
@@ -108,16 +137,8 @@ def get_incidents():
     }
 
 
-@app.get("/api/resources/ec2")
-def get_ec2_resources():
-    return [
-        {"instance_id": "i-09f1234a56b78c901", "name": "aws-infra-master-node", "type": "t3.micro", "state": "running", "private_ip": "172.31.23.67"},
-        {"instance_id": "i-08a9876b54c32d102", "name": "aws-infra-worker-01", "type": "t3.micro", "state": "running", "private_ip": "172.31.38.194"}
-    ]
-
-
 # ==========================================
-# OLLAMA AI SRE ASSISTANT INTEGRATION
+# OLLAMA AI ASSISTANT
 # ==========================================
 
 @app.get("/api/ai/health")
@@ -158,7 +179,7 @@ async def ai_chat(request: Request):
             messages = [
                 {
                     "role": "system",
-                    "content": "You are an expert AWS Site Reliability Engineer (SRE). Provide concise, technical diagnoses of infrastructure events and metrics."
+                    "content": "You are an expert AWS Site Reliability Engineer (SRE). Provide concise, technical diagnoses."
                 },
                 {
                     "role": "user",
