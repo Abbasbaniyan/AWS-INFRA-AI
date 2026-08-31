@@ -8,8 +8,8 @@ pipeline {
         HOST_PORT          = '8000'
         CONTAINER_PORT     = '8000'
         AWS_DEFAULT_REGION = 'eu-north-1'
-        // EC2 Private IP running Ollama
-        OLLAMA_BASE_URL    = 'http://172.31.23.67:11434'
+        // Docker host gateway configuration
+        OLLAMA_BASE_URL    = 'http://host.docker.internal:11434'
         OLLAMA_MODEL       = 'qwen2.5-coder:7b'
     }
 
@@ -54,6 +54,7 @@ pipeline {
                         docker run -d \
                             --name ${CONTAINER_NAME} \
                             --restart unless-stopped \
+                            --add-host=host.docker.internal:host-gateway \
                             -p ${HOST_PORT}:${CONTAINER_PORT} \
                             -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
                             -e OLLAMA_BASE_URL="${OLLAMA_BASE_URL}" \
@@ -105,6 +106,7 @@ pipeline {
                     docker run -d \
                         --name ${CONTAINER_NAME} \
                         --restart unless-stopped \
+                        --add-host=host.docker.internal:host-gateway \
                         -p ${HOST_PORT}:${CONTAINER_PORT} \
                         -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} \
                         -e OLLAMA_BASE_URL="${OLLAMA_BASE_URL}" \
