@@ -38,7 +38,7 @@ app.add_middleware(
 
 START_TIME = time.time()
 
-# Recommended high-reasoning model: qwen2.5-coder:7b or llama3.1:8b
+# Ollama Server Configuration
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
 
@@ -734,7 +734,6 @@ async def chat(request: ChatRequest):
     live_anom = get_anomalies()
     incident_ctx = query_cloudwatch_incident_context()
 
-    # Dynamic Infrastructure Graph Injection
     infra_graph = {
         "region": "eu-north-1",
         "system_health": {
@@ -782,9 +781,11 @@ async def chat(request: ChatRequest):
         "active_anomalies": live_anom.get("anomalies", [])
     }
 
+    infra_graph_json = json.dumps(infra_graph, indent=2)
+
     system_prompt = f"""You are CloudOps AI SRE, an expert Principal Site Reliability Engineer and AWS Cloud Architect.
 
 You have direct access to the live AWS infrastructure environment and telemetry snapshot below:
 
 ```json
-{json.dumps(infra_graph, indent=2)}
+{infra_graph_json}
