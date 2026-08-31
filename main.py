@@ -1,6 +1,6 @@
 """
 AWS Infrastructure AI Assistant & CloudWatch Incident Troubleshooting System
-Pure Dynamic AI Engine powered by Ollama with Live AWS Telemetry Grounding.
+Direct Ollama LLM Inference Engine with Live AWS Telemetry Grounding.
 """
 
 import os
@@ -37,11 +37,10 @@ app.add_middleware(
 
 START_TIME = time.time()
 
-# Ollama Server Configuration
+# Configuration
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:0.5b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b")
 
-# Runtime Logs and Service States
 system_logs = []
 service_states = {
     "nginx": "running",
@@ -136,79 +135,35 @@ def log_event(level: str, source: str, message: str):
         system_logs.pop()
     return entry
 
-for lvl, src, msg in [
-    ("INFO", "CloudWatch", "Metric alarm 'High-CPU-Utilization' evaluated OK."),
-    ("INFO", "EC2-SSM", "SSM Agent ping status healthy on instance i-08a79c234f9a1."),
-    ("WARN", "ALB-Ingress", "Target response time spike detected on target-group/tg-prod-app (avg 310ms)."),
-    ("INFO", "S3-Sync", "CRR sync completed for bucket prod-infra-logs-us-east-1 -> eu-central-1."),
-    ("INFO", "IAM-Auth", "STS temporary token generated for role 'OpsMonitoringAdminRole'.")
-]:
-    log_event(lvl, src, msg)
-
-def get_aws_session():
-    region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION") or "eu-north-1"
-    return boto3.Session(region_name=region)
-
-def query_cloudwatch_incident_context(log_group: str = "/aws/ec2/system") -> Dict[str, Any]:
-    return {
-        "active_alarms": ["No active CloudWatch alarm threshold breached."],
-        "recent_error_logs": ["Zero critical runtime anomalies detected in application logs."],
-        "queried_at": datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
-    }
-
-async def fetch_ollama(endpoint: str, method: str = "GET", payload: dict = None, timeout: float = 60.0):
-    candidates = [
-        OLLAMA_BASE_URL,
-        "http://127.0.0.1:11434",
-        "http://host.docker.internal:11434",
-        "http://172.17.0.1:11434"
-    ]
-    seen = set()
-    unique_candidates = [c for c in candidates if not (c in seen or seen.add(c))]
-
-    for base in unique_candidates:
-        url = f"{base.rstrip('/')}{endpoint}"
-        try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                if method == "GET":
-                    resp = await client.get(url)
-                else:
-                    resp = await client.post(url, json=payload)
-                if resp.status_code == 200:
-                    return resp
-        except Exception:
-            continue
-    return None
-
 # -----------------------------------------------------------------------------
-# Ollama Health Check Endpoint
+# Endpoints
 # -----------------------------------------------------------------------------
 @app.get("/api/ai/health")
 async def get_ai_server_health():
     start = time.time()
-    resp = await fetch_ollama("/api/tags", method="GET", timeout=6.0)
-    if resp and resp.status_code == 200:
-        latency_ms = round((time.time() - start) * 1000, 2)
-        models = [m.get("name") for m in resp.json().get("models", [])]
-        return {
-            "engine": "Ollama",
-            "status": "ONLINE",
-            "configured_model": OLLAMA_MODEL,
-            "server_url": OLLAMA_BASE_URL,
-            "available_models": models,
-            "latency_ms": latency_ms
-        }
+    for base in [OLLAMA_BASE_URL, "http://127.0.0.1:11434", "http://host.docker.internal:11434"]:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.get(f"{base}/api/tags")
+                if res.status_code == 200:
+                    models = [m.get("name") for m in res.json().get("models", [])]
+                    return {
+                        "engine": "Ollama",
+                        "status": "ONLINE",
+                        "configured_model": OLLAMA_MODEL,
+                        "server_url": base,
+                        "available_models": models,
+                        "latency_ms": round((time.time() - start) * 1000, 2)
+                    }
+        except Exception:
+            continue
     return {
         "engine": "Ollama",
         "status": "OFFLINE",
         "configured_model": OLLAMA_MODEL,
-        "server_url": OLLAMA_BASE_URL,
-        "error": "Ollama daemon offline on local host."
+        "server_url": OLLAMA_BASE_URL
     }
 
-# -----------------------------------------------------------------------------
-# Core API Endpoints
-# -----------------------------------------------------------------------------
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.0.0"}
@@ -268,15 +223,14 @@ def get_metrics():
 
 @app.get("/api/incidents/triage")
 def get_incident_triage():
-    incident_data = query_cloudwatch_incident_context()
     anomalies = get_anomalies()
     metrics = get_metrics()
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "health_score": metrics["health"]["score"],
         "system_status": metrics["health"]["status"],
-        "cloudwatch_alarms": incident_data["active_alarms"],
-        "correlated_errors": incident_data["recent_error_logs"],
+        "cloudwatch_alarms": ["Metric alarm 'High-CPU-Utilization' evaluated OK."],
+        "correlated_errors": ["Zero critical runtime anomalies detected in application logs."],
         "anomalies": anomalies.get("anomalies", [])
     }
 
@@ -428,7 +382,7 @@ def get_ec2_cloudwatch_metrics(instance_id: Optional[str] = None):
     }
 
 # -----------------------------------------------------------------------------
-# Pure Dynamic SRE Chat Engine (Direct Ollama LLM Reasoning)
+# Pure Dynamic SRE Chat Engine (Real AI Generation)
 # -----------------------------------------------------------------------------
 @app.post("/chat")
 @app.post("/api/ai/chat")
@@ -436,64 +390,73 @@ def get_ec2_cloudwatch_metrics(instance_id: Optional[str] = None):
 async def chat(request: ChatRequest):
     user_prompt = request.message or request.prompt or ""
 
-    # Live telemetry grounding
+    # Live telemetry data injected as grounding context
     metrics = get_metrics()
     live_ec2 = fetch_live_ec2()
     live_s3 = fetch_live_s3()
 
-    ec2_count = len(live_ec2.get("items", []))
-    ec2_names = [f"{i['name']} ({i['id']})" for i in live_ec2.get("items", [])]
+    ec2_instances = [f"{i['name']} ({i['id']})" for i in live_ec2.get("items", [])]
+    s3_names = [b["name"] for b in live_s3.get("items", [])]
 
-    # Compact telemetry grounding prompt
     system_prompt = (
-        f"You are CloudOps AI SRE, an expert Site Reliability Engineer for AWS. "
-        f"Answer directly, concisely, and accurately based on live infrastructure data below.\n"
-        f"LIVE AWS ENVIRONMENT CONTEXT:\n"
-        f"- EC2 Instances: {ec2_count} running [{', '.join(ec2_names)}]\n"
-        f"- Host CPU: {metrics['cpu']['percent']}%, Memory: {metrics['memory']['percent']}%, Health Score: {metrics['health']['score']}/100\n"
-        f"- Load Balancer: Prod ALB routing to EC2 cluster\n"
-        f"- Storage: S3 buckets [{', '.join([b['name'] for b in live_s3.get('items', [])])}]\n"
-        f"For questions about the infrastructure, use this live context. For general questions, answer directly."
+        "You are CloudOps AI, an authentic, highly knowledgeable Principal Site Reliability Engineer (SRE).\n"
+        "Communicate conversationally, naturally, and dynamically. Do NOT use canned or repetitive templates.\n"
+        "Here is the live infrastructure state for your reference:\n"
+        f"- Active EC2 Nodes: {', '.join(ec2_instances)}\n"
+        f"- Active S3 Buckets: {', '.join(s3_names)}\n"
+        f"- Host CPU: {metrics['cpu']['percent']}%, Memory: {metrics['memory']['percent']}%\n"
+        "Answer technical queries with accurate diagnostics and general questions conversationally."
     )
 
-    messages_payload = [{"role": "system", "content": system_prompt}]
-    if request.history:
-        for msg in request.history[-4:]:
-            messages_payload.append({"role": msg.role, "content": msg.content})
-    messages_payload.append({"role": "user", "content": user_prompt})
+    messages = [{"role": "system", "content": system_prompt}]
 
-    ollama_payload = {
-        "model": OLLAMA_MODEL,
-        "messages": messages_payload,
-        "stream": False,
-        "options": {
-            "temperature": 0.2,
-            "num_predict": 120,   # Fast CPU completion (~2s)
-            "num_ctx": 512,
-            "num_thread": 2
-        }
-    }
+    # Maintain conversation memory across multiple turns
+    client_history = request.history or request.messages or []
+    for h in client_history[-6:]:
+        messages.append({"role": h.role, "content": h.content})
+    messages.append({"role": "user", "content": user_prompt})
 
-    resp = await fetch_ollama("/api/chat", method="POST", payload=ollama_payload, timeout=45.0)
-    if resp and resp.status_code == 200:
-        content = resp.json().get("message", {}).get("content", "")
-        if content and content.strip():
-            return {
-                "reply": content,
-                "response": content,
-                "message": content,
-                "content": content,
-                "source": f"ollama-{OLLAMA_MODEL}",
-                "model": OLLAMA_MODEL
-            }
+    endpoints = [
+        f"{OLLAMA_BASE_URL}/api/chat",
+        "http://127.0.0.1:11434/api/chat",
+        "http://host.docker.internal:11434/api/chat",
+        "http://172.17.0.1:11434/api/chat"
+    ]
+
+    for ep in endpoints:
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                res = await client.post(
+                    ep,
+                    json={
+                        "model": OLLAMA_MODEL,
+                        "messages": messages,
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.6,
+                            "num_predict": 200,
+                            "num_ctx": 1024
+                        }
+                    }
+                )
+                if res.status_code == 200:
+                    content = res.json().get("message", {}).get("content", "")
+                    if content and content.strip():
+                        return {
+                            "reply": content,
+                            "response": content,
+                            "message": content,
+                            "content": content,
+                            "source": f"ollama-{OLLAMA_MODEL}",
+                            "model": OLLAMA_MODEL
+                        }
+        except Exception:
+            continue
 
     return {
-        "reply": f"There are currently {ec2_count} EC2 instances running in your fleet: {', '.join(ec2_names)}.",
-        "response": f"There are currently {ec2_count} EC2 instances running in your fleet: {', '.join(ec2_names)}.",
-        "message": f"There are currently {ec2_count} EC2 instances running in your fleet: {', '.join(ec2_names)}.",
-        "content": f"There are currently {ec2_count} EC2 instances running in your fleet: {', '.join(ec2_names)}.",
-        "source": "live-telemetry",
-        "model": OLLAMA_MODEL
+        "reply": "⚠️ Ollama inference request failed to reach the server. Please verify that Ollama is running.",
+        "response": "⚠️ Ollama inference request failed to reach the server. Please verify that Ollama is running.",
+        "source": "error"
     }
 
 # -----------------------------------------------------------------------------
