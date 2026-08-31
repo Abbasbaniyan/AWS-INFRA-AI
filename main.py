@@ -42,7 +42,7 @@ START_TIME = time.time()
 
 # Configuration
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b")
 AWS_REGION = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION") or "eu-north-1"
 
 # Telemetry state
@@ -791,7 +791,7 @@ async def chat(request: ChatRequest):
                         "options": {
                             "temperature": 0.2,
                             "num_predict": 150,     # Limits generation length for fast CPU completion
-                            "num_ctx": 2048,        # Drops KV-cache overhead by 75% compared to 8192
+                            "num_ctx": 1048,        # Drops KV-cache overhead by 75% compared to 8192
                             "num_thread": 2         # Maximizes CPU thread utilization
                         }
                     }
