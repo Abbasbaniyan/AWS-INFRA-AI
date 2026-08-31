@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AWS Infrastructure AI Assistant | CloudOps Control Plane</title>
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -54,7 +54,7 @@
       color: var(--text-primary);
       line-height: 1.5;
       overflow-x: hidden;
-      height: 100vh;
+      min-height: 100vh;
     }
 
     .app-layout { display: flex; height: 100vh; width: 100vw; overflow: hidden; position: relative; }
@@ -172,7 +172,7 @@
       top: 0;
       z-index: 15;
     }
-    .search-container { position: relative; width: 440px; display: flex; align-items: center; }
+    .search-container { position: relative; width: 440px; max-width: 100%; display: flex; align-items: center; }
     .search-icon { position: absolute; left: 12px; width: 17px; height: 17px; color: var(--text-muted); }
     #globalSearchInput {
       width: 100%;
@@ -238,6 +238,7 @@
       font-weight: 500;
       cursor: pointer;
       transition: all 0.2s ease;
+      white-space: nowrap;
     }
     .action-btn:hover { background: rgba(255, 255, 255, 0.1); }
     .action-btn.ai-toggle-btn {
@@ -284,7 +285,7 @@
     .health-summary-card { display: flex; flex-direction: column; }
     .pulse-badge { font-size: 0.72rem; color: var(--accent-emerald); font-weight: 600; }
     .health-gauge-container { padding: 22px 20px; display: flex; align-items: center; gap: 20px; }
-    .circle-progress-box { position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; }
+    .circle-progress-box { position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .progress-ring { transform: rotate(-90deg); }
     .progress-ring-fill { transition: stroke-dashoffset 0.8s ease, stroke 0.4s ease; stroke-dasharray: 364.4; stroke-dashoffset: 60; }
     .gauge-center-text { position: absolute; display: flex; flex-direction: column; align-items: center; }
@@ -349,13 +350,13 @@
     .ai-diagnose-btn-inline:hover { background: var(--accent-cyan); color: #000; }
 
     /* Tables & Consoles */
-    .table-responsive { overflow-x: auto; max-height: 280px; }
+    .table-responsive { overflow-x: auto; max-height: 280px; -webkit-overflow-scrolling: touch; }
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: left; }
-    .data-table th { padding: 10px 14px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border-glass); background: rgba(255, 255, 255, 0.02); }
-    .data-table td { padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+    .data-table th { padding: 10px 14px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border-glass); background: rgba(255, 255, 255, 0.02); white-space: nowrap; }
+    .data-table td { padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); white-space: nowrap; }
 
     .console-box { padding: 12px 16px; background: #050811; font-family: var(--font-mono); font-size: 0.76rem; height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
-    .log-entry { display: flex; gap: 10px; line-height: 1.4; }
+    .log-entry { display: flex; gap: 10px; line-height: 1.4; flex-wrap: wrap; }
     .log-ts { color: var(--text-muted); }
     .log-lvl.INFO { color: var(--accent-cyan); }
     .log-lvl.WARN { color: var(--accent-amber); }
@@ -366,6 +367,7 @@
     /* Slide-out AI Panel */
     .ai-assistant-panel {
       width: 420px;
+      max-width: 100vw;
       background: rgba(10, 15, 29, 0.97);
       border-left: 1px solid var(--border-glass);
       display: flex;
@@ -382,25 +384,25 @@
     .ai-assistant-panel.open { right: 0; }
     .ai-panel-header { padding: 18px 20px; border-bottom: 1px solid var(--border-glass); display: flex; align-items: center; justify-content: space-between; }
     .ai-title-wrap { display: flex; align-items: center; gap: 12px; }
-    .sparkle-icon-box { width: 36px; height: 36px; border-radius: var(--radius-md); background: linear-gradient(135deg, #06b6d4, #6366f1); display: flex; align-items: center; justify-content: center; color: #fff; }
+    .sparkle-icon-box { width: 36px; height: 36px; border-radius: var(--radius-md); background: linear-gradient(135deg, #06b6d4, #6366f1); display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; }
     .ai-name { font-size: 0.95rem; font-weight: 700; }
     .ai-status { font-size: 0.7rem; color: var(--accent-emerald); display: flex; align-items: center; gap: 5px; }
     .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-emerald); }
-    .ai-prompts-slider { padding: 10px 16px; display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--border-glass); white-space: nowrap; }
-    .prompt-chip { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); color: var(--text-secondary); font-size: 0.72rem; padding: 5px 10px; border-radius: var(--radius-full); cursor: pointer; transition: all 0.15s ease; }
+    .ai-prompts-slider { padding: 10px 16px; display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--border-glass); white-space: nowrap; -webkit-overflow-scrolling: touch; }
+    .prompt-chip { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); color: var(--text-secondary); font-size: 0.72rem; padding: 5px 10px; border-radius: var(--radius-full); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0; }
     .prompt-chip:hover { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); border-color: var(--accent-cyan); }
     .ai-chat-messages { flex: 1; padding: 18px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
     .chat-message { display: flex; gap: 10px; font-size: 0.84rem; }
     .chat-message.user { flex-direction: row-reverse; }
     .message-avatar { width: 28px; height: 28px; border-radius: var(--radius-full); background: rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .chat-message.assistant .message-avatar { background: linear-gradient(135deg, #0284c7, #4f46e5); }
-    .message-content { background: rgba(255, 255, 255, 0.04); padding: 12px 14px; border-radius: var(--radius-md); max-width: 82%; line-height: 1.5; border: 1px solid var(--border-glass); }
+    .message-content { background: rgba(255, 255, 255, 0.04); padding: 12px 14px; border-radius: var(--radius-md); max-width: 82%; line-height: 1.5; border: 1px solid var(--border-glass); word-break: break-word; }
     .chat-message.user .message-content { background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); }
 
     .ai-input-wrapper { padding: 16px 20px; border-top: 1px solid var(--border-glass); }
     .input-form { display: flex; gap: 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-glass); border-radius: var(--radius-md); padding: 6px 8px; }
     .input-form textarea { flex: 1; background: transparent; border: none; color: #fff; font-family: var(--font-sans); font-size: 0.84rem; resize: none; outline: none; }
-    .send-btn { background: var(--accent-cyan); border: none; color: #000; width: 36px; height: 36px; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; justify-content: center; align-self: flex-end; }
+    .send-btn { background: var(--accent-cyan); border: none; color: #000; width: 36px; height: 36px; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; justify-content: center; align-self: flex-end; flex-shrink: 0; }
     .send-btn:hover { background: #7dd3fc; }
     .input-footer-note { font-size: 0.68rem; color: var(--text-muted); margin-top: 6px; text-align: center; }
 
@@ -422,6 +424,100 @@
     .text-emerald { color: var(--accent-emerald); }
     .text-amber { color: var(--accent-amber); }
     .text-rose { color: var(--accent-rose); }
+
+    /* ==========================================================
+       RESPONSIVE BREAKPOINTS (GLOBAL LAYOUT ADAPTATION)
+       ========================================================== */
+    @media (max-width: 1280px) {
+      .quick-insights-container {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .dashboard-grid-top {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .dashboard-grid-middle,
+      .dashboard-grid-bottom {
+        grid-template-columns: 1fr;
+      }
+      .quick-insights-container {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .top-navbar {
+        padding: 0 16px;
+      }
+      .content-view {
+        padding: 16px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .app-layout {
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+      }
+      .sidebar {
+        width: 100%;
+        min-width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border-glass);
+      }
+      .sidebar-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 8px 12px;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+      }
+      .sidebar-nav .nav-section-title,
+      .sidebar-footer {
+        display: none;
+      }
+      .nav-item {
+        width: auto;
+        padding: 8px 12px;
+      }
+      .nav-item.active {
+        border-left: none;
+        border-bottom: 2px solid var(--accent-cyan);
+      }
+      .top-navbar {
+        height: auto;
+        padding: 12px 16px;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .search-container {
+        width: 100%;
+        order: 2;
+      }
+      .header-actions {
+        width: 100%;
+        justify-content: space-between;
+        order: 1;
+      }
+      .quick-insights-container {
+        grid-template-columns: 1fr;
+      }
+      .health-gauge-container {
+        flex-direction: column;
+        text-align: center;
+      }
+      .health-counters-row {
+        justify-content: center;
+      }
+      .ai-assistant-panel {
+        width: 100vw;
+        right: -100vw;
+      }
+      .user-role {
+        display: none;
+      }
+    }
   </style>
 </head>
 <body class="dark-theme">
