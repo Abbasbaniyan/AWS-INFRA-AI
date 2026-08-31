@@ -1,6 +1,6 @@
 """
 AWS Infrastructure AI Assistant & CloudWatch Incident Troubleshooting System
-High-Reasoning DevOps Engine with Live Grounding & Fast Dynamic Inference.
+Module 1: Intent & Resource Detection with Targeted Boto3 Telemetry Collectors.
 """
 
 import os
@@ -8,6 +8,7 @@ import time
 import json
 import re
 from datetime import datetime, timezone, timedelta
+import random
 import psutil
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Response
@@ -16,14 +17,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 import httpx
 
 load_dotenv()
 
 app = FastAPI(
     title="AWS Infrastructure AI Assistant API",
-    description="Dynamic CloudOps AI engine with live AWS telemetry grounding.",
-    version="3.0.0"
+    description="Dynamic CloudOps AI engine with targeted AWS telemetry grounding.",
+    version="3.1.0"
 )
 
 app.add_middleware(
@@ -35,9 +38,13 @@ app.add_middleware(
 )
 
 START_TIME = time.time()
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:0.5b")
 
+# Configuration
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
+AWS_REGION = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION") or "eu-north-1"
+
+# Telemetry state
 system_logs = []
 service_states = {
     "nginx": "running",
@@ -50,6 +57,9 @@ service_states = {
 simulated_anomalies = []
 incident_history = []
 
+# -----------------------------------------------------------------------------
+# Data Models
+# -----------------------------------------------------------------------------
 class ChatMessage(BaseModel):
     role: str
     content: str
@@ -69,6 +79,395 @@ class RemediationRequest(BaseModel):
     action_type: str
     target: str
 
+# -----------------------------------------------------------------------------
+# Base AWS Session
+# -----------------------------------------------------------------------------
+def get_aws_session():
+    return boto3.Session(region_name=AWS_REGION)
+
+# -----------------------------------------------------------------------------
+# MODULE 1: Deterministic Intent & Resource Classifier
+# -----------------------------------------------------------------------------
+def classify_chat_intent(prompt: str) -> Dict[str, Any]:
+    p = prompt.lower()
+    
+    # 1. ALB / Load Balancer Intent
+    if any(k in p for k in ["alb", "load balancer", "target group", "target-group", "elb", "tg-", "listener", "5xx", "target health"]):
+        return {
+            "primary_resource": "ALB",
+            "intent_type": "DIAGNOSTIC",
+            "needs_host_metrics": False,
+            "target_hint": next((w for w in prompt.split() if "tg-" in w.lower() or "alb" in w.lower() or "app/" in w.lower()), None)
+        }
+    
+    # 2. Auto Scaling Group Intent
+    if any(k in p for k in ["asg", "auto scaling", "autoscaling", "scale out", "scale in", "desired capacity"]):
+        return {
+            "primary_resource": "ASG",
+            "intent_type": "SCALING_ANALYSIS",
+            "needs_host_metrics": False,
+            "target_hint": next((w for w in prompt.split() if "asg" in w.lower()), None)
+        }
+    
+    # 3. RDS / Database Intent
+    if any(k in p for k in ["rds", "database", "aurora", "postgres", "mysql", "replication lag", "db connection", "db-"]):
+        return {
+            "primary_resource": "RDS",
+            "intent_type": "DATABASE_HEALTH",
+            "needs_host_metrics": False,
+            "target_hint": next((w for w in prompt.split() if "db-" in w.lower()), None)
+        }
+    
+    # 4. S3 Storage Intent
+    if any(k in p for k in ["s3", "bucket", "bucket policy", "encryption", "objects", "storage vault"]):
+        return {
+            "primary_resource": "S3",
+            "intent_type": "STORAGE_INVENTORY",
+            "needs_host_metrics": False,
+            "target_hint": next((w for w in prompt.split() if "bucket" in w.lower() or "vault" in w.lower()), None)
+        }
+    
+    # 5. VPC / Networking Intent
+    if any(k in p for k in ["vpc", "subnet", "cidr", "route table", "nat gateway", "igw", "security group"]):
+        return {
+            "primary_resource": "VPC",
+            "intent_type": "NETWORK_TOPOLOGY",
+            "needs_host_metrics": False,
+            "target_hint": next((w for w in prompt.split() if "vpc-" in w.lower() or "subnet-" in w.lower()), None)
+        }
+        
+    # 6. IAM / Security Intent
+    if any(k in p for k in ["iam", "role", "policy", "sts", "permission", "credentials", "access key"]):
+        return {
+            "primary_resource": "IAM",
+            "intent_type": "SECURITY_AUDIT",
+            "needs_host_metrics": False,
+            "target_hint": next((w for w in prompt.split() if "role" in w.lower() or "policy" in w.lower()), None)
+        }
+
+    # 7. CloudWatch / Alarms / Logs Intent
+    if any(k in p for k in ["cloudwatch", "alarm", "log group", "metrics", "log stream", "telemetry error", "trace"]):
+        return {
+            "primary_resource": "CLOUDWATCH",
+            "intent_type": "INCIDENT_LOGS",
+            "needs_host_metrics": True,
+            "target_hint": None
+        }
+
+    # 8. EC2 / Host Compute / Process Intent
+    if any(k in p for k in ["ec2", "instance", "cpu", "memory", "ram", "spike", "pid", "process", "swap", "disk full", "reboot", "i-"]):
+        return {
+            "primary_resource": "EC2",
+            "intent_type": "COMPUTE_HEALTH",
+            "needs_host_metrics": True,
+            "target_hint": next((w for w in prompt.split() if "i-" in w.lower()), None)
+        }
+
+    # 9. General DevOps / Architectural Question
+    return {
+        "primary_resource": "GENERAL",
+        "intent_type": "GENERAL_KNOWLEDGE",
+        "needs_host_metrics": False,
+        "target_hint": None
+    }
+
+# -----------------------------------------------------------------------------
+# MODULE 1: Specialized Boto3 Telemetry Collectors
+# -----------------------------------------------------------------------------
+def collect_alb_telemetry(target_hint: Optional[str] = None) -> Dict[str, Any]:
+    session = get_aws_session()
+    result = {
+        "resource_type": "AWS::ElasticLoadBalancingV2",
+        "collection_status": "REAL_AWS_DATA",
+        "region": AWS_REGION,
+        "load_balancers": [],
+        "target_groups": [],
+        "target_health": [],
+        "metrics": {},
+        "error": None
+    }
+    
+    try:
+        elbv2 = session.client("elbv2")
+        cw = session.client("cloudwatch")
+        
+        # 1. Describe Load Balancers
+        lbs = elbv2.describe_load_balancers().get("LoadBalancers", [])
+        for lb in lbs:
+            result["load_balancers"].append({
+                "name": lb.get("LoadBalancerName"),
+                "arn": lb.get("LoadBalancerArn"),
+                "dns_name": lb.get("DNSName"),
+                "state": lb.get("State", {}).get("Code"),
+                "scheme": lb.get("Scheme"),
+                "type": lb.get("Type")
+            })
+            
+        # 2. Describe Target Groups & Target Health
+        tgs = elbv2.describe_target_groups().get("TargetGroups", [])
+        for tg in tgs:
+            tg_arn = tg.get("TargetGroupArn")
+            tg_info = {
+                "name": tg.get("TargetGroupName"),
+                "arn": tg_arn,
+                "protocol": tg.get("Protocol"),
+                "port": tg.get("Port"),
+                "target_type": tg.get("TargetType"),
+                "health_check_path": tg.get("HealthCheckPath")
+            }
+            result["target_groups"].append(tg_info)
+            
+            # Fetch target health per TG
+            try:
+                th_res = elbv2.describe_target_health(TargetGroupArn=tg_arn)
+                for desc in th_res.get("TargetHealthDescriptions", []):
+                    result["target_health"].append({
+                        "target_group": tg.get("TargetGroupName"),
+                        "target_id": desc.get("Target", {}).get("Id"),
+                        "port": desc.get("Target", {}).get("Port"),
+                        "state": desc.get("TargetHealth", {}).get("State"),
+                        "reason": desc.get("TargetHealth", {}).get("Reason"),
+                        "description": desc.get("TargetHealth", {}).get("Description")
+                    })
+            except Exception as e:
+                result["target_health"].append({"target_group": tg.get("TargetGroupName"), "error": str(e)})
+
+        # 3. Fetch CloudWatch Latency & 5XX Metrics (Past 15 mins)
+        if lbs:
+            lb_dim = "/".join(lbs[0]["LoadBalancerArn"].split("/")[-3:])
+            end_t = datetime.now(timezone.utc)
+            start_t = end_t - timedelta(minutes=15)
+            
+            lat_res = cw.get_metric_statistics(
+                Namespace="AWS/ApplicationELB",
+                MetricName="TargetResponseTime",
+                Dimensions=[{"Name": "LoadBalancer", "Value": lb_dim}],
+                StartTime=start_t,
+                EndTime=end_t,
+                Period=300,
+                Statistics=["Average", "Maximum"]
+            )
+            err_res = cw.get_metric_statistics(
+                Namespace="AWS/ApplicationELB",
+                MetricName="HTTPCode_Target_5XX_Count",
+                Dimensions=[{"Name": "LoadBalancer", "Value": lb_dim}],
+                StartTime=start_t,
+                EndTime=end_t,
+                Period=300,
+                Statistics=["Sum"]
+            )
+            result["metrics"]["avg_latency_sec"] = lat_res.get("Datapoints", [{}])[-1].get("Average", 0.0) if lat_res.get("Datapoints") else "No data points"
+            result["metrics"]["target_5xx_count"] = err_res.get("Datapoints", [{}])[-1].get("Sum", 0) if err_res.get("Datapoints") else 0
+
+    except (ClientError, BotoCoreError, NoCredentialsError) as err:
+        result["collection_status"] = "UNAVAILABLE"
+        result["error"] = f"AWS API Error: {str(err)}"
+        # Structured mock context for demonstration only
+        result["demo_mock_context"] = {
+            "load_balancers": [{"name": "node-alb", "state": "active", "type": "application", "scheme": "internet-facing"}],
+            "target_groups": [{"name": "tg-prod-app", "protocol": "HTTP", "port": 8000, "health_check_path": "/health"}],
+            "target_health": [{"target_group": "tg-prod-app", "target_id": "i-09f482a1b9e87110a", "port": 8000, "state": "healthy"}],
+            "metrics": {"avg_latency_ms": 310, "target_5xx_count": 0}
+        }
+        
+    return result
+
+def collect_ec2_telemetry(target_hint: Optional[str] = None) -> Dict[str, Any]:
+    session = get_aws_session()
+    result = {
+        "resource_type": "AWS::EC2::Instance",
+        "collection_status": "REAL_AWS_DATA",
+        "region": AWS_REGION,
+        "instances": [],
+        "error": None
+    }
+    
+    try:
+        ec2 = session.client("ec2")
+        reservations = ec2.describe_instances().get("Reservations", [])
+        for r in reservations:
+            for inst in r.get("Instances", []):
+                name_tag = next((tag["Value"] for tag in inst.get("Tags", []) if tag["Key"] == "Name"), inst.get("InstanceId"))
+                result["instances"].append({
+                    "id": inst.get("InstanceId"),
+                    "name": name_tag,
+                    "state": inst.get("State", {}).get("Name"),
+                    "type": inst.get("InstanceType"),
+                    "private_ip": inst.get("PrivateIpAddress", "N/A"),
+                    "public_ip": inst.get("PublicIpAddress", "N/A"),
+                    "az": inst.get("Placement", {}).get("AvailabilityZone"),
+                    "launch_time": inst.get("LaunchTime").isoformat() if inst.get("LaunchTime") else "N/A"
+                })
+    except (ClientError, BotoCoreError, NoCredentialsError) as err:
+        result["collection_status"] = "UNAVAILABLE"
+        result["error"] = f"AWS API Error: {str(err)}"
+        result["demo_mock_context"] = {
+            "instances": [
+                {"id": "i-09f482a1b9e87110a", "name": "prod-api-cluster-01", "state": "running", "type": "t3.micro", "private_ip": "172.31.23.67"},
+                {"id": "i-0219c4d9a1811a03f", "name": "prod-api-cluster-02", "state": "running", "type": "t3.micro", "private_ip": "172.31.38.194"}
+            ]
+        }
+    return result
+
+def collect_rds_telemetry(target_hint: Optional[str] = None) -> Dict[str, Any]:
+    session = get_aws_session()
+    result = {
+        "resource_type": "AWS::RDS::DBInstance",
+        "collection_status": "REAL_AWS_DATA",
+        "region": AWS_REGION,
+        "databases": [],
+        "error": None
+    }
+    
+    try:
+        rds = session.client("rds")
+        dbs = rds.describe_db_instances().get("DBInstances", [])
+        for db in dbs:
+            result["databases"].append({
+                "identifier": db.get("DBInstanceIdentifier"),
+                "engine": db.get("Engine"),
+                "engine_version": db.get("EngineVersion"),
+                "status": db.get("DBInstanceStatus"),
+                "class": db.get("DBInstanceClass"),
+                "multi_az": db.get("MultiAZ"),
+                "endpoint": db.get("Endpoint", {}).get("Address"),
+                "port": db.get("Endpoint", {}).get("Port")
+            })
+    except (ClientError, BotoCoreError, NoCredentialsError) as err:
+        result["collection_status"] = "UNAVAILABLE"
+        result["error"] = f"AWS API Error: {str(err)}"
+        result["demo_mock_context"] = {
+            "databases": [
+                {"identifier": "aurora-postgres-primary", "engine": "aurora-postgresql", "engine_version": "15.4", "status": "available", "multi_az": True, "class": "db.r6g.large"}
+            ]
+        }
+    return result
+
+def collect_s3_telemetry(target_hint: Optional[str] = None) -> Dict[str, Any]:
+    session = get_aws_session()
+    result = {
+        "resource_type": "AWS::S3::Bucket",
+        "collection_status": "REAL_AWS_DATA",
+        "region": AWS_REGION,
+        "buckets": [],
+        "error": None
+    }
+    
+    try:
+        s3 = session.client("s3")
+        buckets = s3.list_buckets().get("Buckets", [])
+        for b in buckets:
+            b_name = b.get("Name")
+            enc_status = "Default"
+            try:
+                enc_res = s3.get_bucket_encryption(Bucket=b_name)
+                enc_status = enc_res.get("ServerSideEncryptionConfiguration", {}).get("Rules", [{}])[0].get("ApplyServerSideEncryptionByDefault", {}).get("SSEAlgorithm", "Enabled")
+            except Exception:
+                enc_status = "Not Explicitly Configured"
+                
+            result["buckets"].append({
+                "name": b_name,
+                "creation_date": b.get("CreationDate").strftime("%Y-%m-%d") if b.get("CreationDate") else "N/A",
+                "encryption": enc_status
+            })
+    except (ClientError, BotoCoreError, NoCredentialsError) as err:
+        result["collection_status"] = "UNAVAILABLE"
+        result["error"] = f"AWS API Error: {str(err)}"
+        result["demo_mock_context"] = {
+            "buckets": [
+                {"name": "prod-infra-logs-us-east-1", "creation_date": "2026-01-15", "encryption": "AES256"},
+                {"name": "telemetry-archive-vault", "creation_date": "2026-02-01", "encryption": "aws:kms"}
+            ]
+        }
+    return result
+
+def collect_cloudwatch_telemetry(target_hint: Optional[str] = None) -> Dict[str, Any]:
+    session = get_aws_session()
+    result = {
+        "resource_type": "AWS::CloudWatch",
+        "collection_status": "REAL_AWS_DATA",
+        "region": AWS_REGION,
+        "alarms_in_alarm": [],
+        "recent_error_logs": [],
+        "error": None
+    }
+    
+    try:
+        cw = session.client("cloudwatch")
+        logs = session.client("logs")
+        
+        # Describe active alarms
+        alarm_res = cw.describe_alarms(StateValue="ALARM")
+        for a in alarm_res.get("MetricAlarms", []):
+            result["alarms_in_alarm"].append({
+                "alarm_name": a.get("AlarmName"),
+                "metric_name": a.get("MetricName"),
+                "namespace": a.get("Namespace"),
+                "reason": a.get("StateReason", "")[:150]
+            })
+            
+        # Log query sample
+        q_start = logs.start_query(
+            logGroupName="/aws/ec2/system",
+            startTime=int((datetime.now(timezone.utc) - timedelta(minutes=15)).timestamp()),
+            endTime=int(datetime.now(timezone.utc).timestamp()),
+            queryString="fields @timestamp, @message | filter @message like /(?i)(error|exception|fail|timeout)/ | limit 4"
+        )
+        time.sleep(0.3)
+        res = logs.get_query_results(queryId=q_start["queryId"])
+        if res.get("status") == "Complete":
+            for row in res.get("results", []):
+                msg = next((cell["value"] for cell in row if cell["field"] == "@message"), None)
+                if msg:
+                    result["recent_error_logs"].append(msg)
+    except (ClientError, BotoCoreError, NoCredentialsError) as err:
+        result["collection_status"] = "UNAVAILABLE"
+        result["error"] = f"AWS API Error: {str(err)}"
+        result["demo_mock_context"] = {
+            "alarms_in_alarm": [{"alarm_name": "High-CPU-Utilization", "metric_name": "CPUUtilization", "reason": "Threshold > 80% breached"}],
+            "recent_error_logs": ["Zero critical unhandled runtime exceptions recorded."]
+        }
+    return result
+
+# -----------------------------------------------------------------------------
+# Telemetry Dispatcher (Executes ONLY Relevant Collector)
+# -----------------------------------------------------------------------------
+def dispatch_telemetry_collection(intent_meta: Dict[str, Any]) -> Dict[str, Any]:
+    res_type = intent_meta["primary_resource"]
+    target_hint = intent_meta.get("target_hint")
+    
+    telemetry_bundle = {
+        "intent_meta": intent_meta,
+        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "targeted_telemetry": {}
+    }
+    
+    if res_type == "ALB":
+        telemetry_bundle["targeted_telemetry"] = collect_alb_telemetry(target_hint)
+    elif res_type == "EC2":
+        telemetry_bundle["targeted_telemetry"] = collect_ec2_telemetry(target_hint)
+    elif res_type == "RDS":
+        telemetry_bundle["targeted_telemetry"] = collect_rds_telemetry(target_hint)
+    elif res_type == "S3":
+        telemetry_bundle["targeted_telemetry"] = collect_s3_telemetry(target_hint)
+    elif res_type == "CLOUDWATCH":
+        telemetry_bundle["targeted_telemetry"] = collect_cloudwatch_telemetry(target_hint)
+    elif res_type == "GENERAL":
+        telemetry_bundle["targeted_telemetry"] = {"note": "General DevOps / Architectural inquiry. No live AWS query required."}
+        
+    if intent_meta.get("needs_host_metrics"):
+        telemetry_bundle["host_metrics"] = {
+            "cpu_percent": psutil.cpu_percent(interval=None),
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_percent": psutil.disk_usage("/").percent,
+            "top_processes": get_top_procs(4)
+        }
+        
+    return telemetry_bundle
+
+# -----------------------------------------------------------------------------
+# Telemetry Helpers for Dashboard
+# -----------------------------------------------------------------------------
 def get_network_rates():
     n1 = psutil.net_io_counters()
     time.sleep(0.02)
@@ -127,22 +526,37 @@ def log_event(level: str, source: str, message: str):
     return entry
 
 # -----------------------------------------------------------------------------
-# Telemetry Endpoints
+# Existing Dashboard REST Endpoints (Preserved 100%)
 # -----------------------------------------------------------------------------
 @app.get("/api/ai/health")
 async def get_ai_server_health():
+    start = time.time()
+    for base in [OLLAMA_BASE_URL, "http://127.0.0.1:11434", "http://host.docker.internal:11434"]:
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                res = await client.get(f"{base}/api/tags")
+                if res.status_code == 200:
+                    models = [m.get("name") for m in res.json().get("models", [])]
+                    return {
+                        "engine": "Ollama-SRE-Engine",
+                        "status": "ONLINE",
+                        "configured_model": OLLAMA_MODEL,
+                        "server_url": base,
+                        "available_models": models,
+                        "latency_ms": round((time.time() - start) * 1000, 2)
+                    }
+        except Exception:
+            continue
     return {
-        "engine": "Ollama-CloudOps-FastInference",
-        "status": "ONLINE",
+        "engine": "Ollama-SRE-Engine",
+        "status": "OFFLINE",
         "configured_model": OLLAMA_MODEL,
-        "server_url": OLLAMA_BASE_URL,
-        "available_models": [OLLAMA_MODEL],
-        "latency_ms": 2.4
+        "server_url": OLLAMA_BASE_URL
     }
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.0.0"}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.1.0"}
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
@@ -155,42 +569,19 @@ def get_metrics():
     cpu = psutil.cpu_percent(interval=None) or 14.8
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
-    
     uptime_sec = int(time.time() - START_TIME)
     uptime_str = f"{uptime_sec // 3600}h {(uptime_sec % 3600) // 60}m {uptime_sec % 60}s"
-    
     stress = (cpu * 0.4) + (mem.percent * 0.4) + (disk.percent * 0.2)
     score = max(0, min(100, round(100 - stress))) or 96
     status, color = ("Optimal", "#10b981") if score >= 80 else ("Degraded", "#f59e0b")
         
     return {
         "timestamp": datetime.now().isoformat(),
-        "cpu": {
-            "percent": cpu,
-            "cores": psutil.cpu_count(logical=True) or 2,
-            "physical_cores": psutil.cpu_count(logical=False) or 2
-        },
-        "memory": {
-            "percent": mem.percent,
-            "used_gb": round(mem.used / (1024**3), 2),
-            "total_gb": round(mem.total / (1024**3), 2),
-            "available_gb": round(mem.available / (1024**3), 2)
-        },
-        "disk": {
-            "percent": disk.percent,
-            "used_gb": round(disk.used / (1024**3), 2),
-            "total_gb": round(disk.total / (1024**3), 2),
-            "free_gb": round(disk.free / (1024**3), 2)
-        },
+        "cpu": {"percent": cpu, "cores": psutil.cpu_count(logical=True) or 2, "physical_cores": psutil.cpu_count(logical=False) or 2},
+        "memory": {"percent": mem.percent, "used_gb": round(mem.used / (1024**3), 2), "total_gb": round(mem.total / (1024**3), 2), "available_gb": round(mem.available / (1024**3), 2)},
+        "disk": {"percent": disk.percent, "used_gb": round(disk.used / (1024**3), 2), "total_gb": round(disk.total / (1024**3), 2), "free_gb": round(disk.free / (1024**3), 2)},
         "uptime": {"seconds": uptime_sec, "formatted": uptime_str},
-        "health": {
-            "score": score,
-            "status": status,
-            "color": color,
-            "healthy_components": 14,
-            "warning_components": 0,
-            "critical_components": 0
-        },
+        "health": {"score": score, "status": status, "color": color, "healthy_components": 14, "warning_components": 0, "critical_components": 0},
         "network": get_network_rates(),
         "disk_io": get_disk_rates(),
         "top_processes": get_top_procs(6),
@@ -266,23 +657,17 @@ async def execute_remediation(req: RemediationRequest):
 
 @app.get("/resources/ec2")
 def fetch_live_ec2():
-    return {
-        "items": [
-            {"id": "i-09f482a1b9e87110a", "name": "prod-api-cluster-01", "status": "running", "details": {"type": "t3.micro", "ip": "172.31.23.67"}},
-            {"id": "i-0219c4d9a1811a03f", "name": "prod-api-cluster-02", "status": "running", "details": {"type": "t3.micro", "ip": "172.31.38.194"}}
-        ],
-        "source": "live-fleet"
-    }
+    data = collect_ec2_telemetry()
+    if data["collection_status"] == "REAL_AWS_DATA":
+        return {"items": data["instances"], "source": "aws-boto3"}
+    return {"items": data["demo_mock_context"]["instances"], "source": "simulated", "note": data["error"]}
 
 @app.get("/resources/s3")
 def fetch_live_s3():
-    return {
-        "items": [
-            {"id": "s3-prod-assets-vault", "name": "prod-infra-logs-us-east-1", "status": "Active", "details": {"objects": 142, "size_mb": 512.4}},
-            {"id": "s3-telemetry-archive", "name": "prod-telemetry-archive", "status": "Active", "details": {"objects": 1280, "size_mb": 2048.0}}
-        ],
-        "source": "aws-storage"
-    }
+    data = collect_s3_telemetry()
+    if data["collection_status"] == "REAL_AWS_DATA":
+        return {"items": data["buckets"], "source": "aws-boto3"}
+    return {"items": data["demo_mock_context"]["buckets"], "source": "simulated", "note": data["error"]}
 
 @app.get("/resources/vpc")
 def fetch_live_vpcs():
@@ -352,74 +737,7 @@ def get_ec2_cloudwatch_metrics(instance_id: Optional[str] = None):
     }
 
 # -----------------------------------------------------------------------------
-# Dynamic SRE Query Parser (Sub-second response engine)
-# -----------------------------------------------------------------------------
-def generate_instant_response(prompt: str, ec2_items: list, s3_items: list, metrics: dict) -> str:
-    p = prompt.lower()
-    ec2_count = len(ec2_items)
-    ec2_list_str = ", ".join([f"`{i['name']}` (`{i['id']}` - {i['status']})" for i in ec2_items])
-    s3_list_str = ", ".join([f"`{b['name']}`" for b in s3_items])
-
-    # 1. Instance Count
-    if "how many" in p and ("instance" in p or "ec2" in p):
-        return f"There are currently **{ec2_count} EC2 instances** running in your active fleet: {ec2_list_str}."
-
-    # 2. Instance Names / IDs / Details
-    if ("name" in p or "list" in p or "id" in p or "which" in p) and ("instance" in p or "ec2" in p or "they" in p or "them" in p):
-        return (
-            f"The **{ec2_count} active EC2 instances** in your environment are:\n\n"
-            + "\n".join([f"* **{i['name']}** — Instance ID: `{i['id']}` | Type: `{i['details']['type']}` | Private IP: `{i['details']['ip']}` | Status: **{i['status']}**" for i in ec2_items])
-        )
-
-    # 3. Load Balancer / ALB Diagnostic
-    if "alb" in p or "load balancer" in p:
-        return (
-            "**🔍 AWS SRE Diagnostic Report: Prod ALB (`node-alb`)**\n\n"
-            "* **Status:** Active / Ingress Healthy\n"
-            "* **Listener Protocols:** `HTTP:80` and `HTTPS:443` forwarding to target group `tg-prod-app`\n"
-            f"* **Target Backends:** {ec2_count} EC2 instances ({ec2_list_str})\n"
-            "* **Observed Latency:** Target response time is averaging **310ms**\n"
-            "* **Target Health Command:**\n"
-            "```bash\n"
-            "aws elbv2 describe-target-health --target-group-arn $(aws elbv2 describe-target-groups --names tg-prod-app --query 'TargetGroups[0].TargetGroupArn' --output text)\n"
-            "```"
-        )
-
-    # 4. CPU / Memory / Resource Utilization
-    if "cpu" in p or "memory" in p or "ram" in p or "usage" in p or "spike" in p:
-        return (
-            f"**🔍 Host Telemetry Status**\n\n"
-            f"* **CPU Utilization:** `{metrics['cpu']['percent']}%` across {metrics['cpu']['cores']} cores\n"
-            f"* **Memory Usage:** `{metrics['memory']['percent']}%` ({metrics['memory']['used_gb']} GB used of {metrics['memory']['total_gb']} GB)\n"
-            f"* **Root Disk Usage:** `{metrics['disk']['percent']}%`\n"
-            f"* **System Health Index:** `{metrics['health']['score']}/100` ({metrics['health']['status']})"
-        )
-
-    # 5. S3 Storage
-    if "s3" in p or "bucket" in p:
-        return (
-            f"**🔍 S3 Storage Buckets**\n\n"
-            f"There are **{len(s3_items)} active S3 storage buckets** detected:\n"
-            + "\n".join([f"* **{b['name']}** (Status: {b['status']} | Size: {b['details']['size_mb']} MB)" for b in s3_items])
-            + "\n\n* **Encryption:** `AES-256 (SSE-S3)` active on all buckets."
-        )
-
-    # 6. General / Identity / Salman Khan / Trivia
-    if "salman khan" in p:
-        return "**Salman Khan** is a leading Indian Bollywood actor, film producer, and television host, widely known for starring in numerous blockbuster Hindi films."
-
-    # 7. General AWS Diagnostic Summary
-    return (
-        f"**🔍 AWS CloudOps Infrastructure Overview**\n\n"
-        f"* **Health Score:** `{metrics['health']['score']}/100` ({metrics['health']['status']})\n"
-        f"* **Compute Fleet:** {ec2_count} running EC2 instances ({ec2_list_str})\n"
-        f"* **Storage:** {len(s3_items)} S3 buckets ({s3_list_str})\n"
-        f"* **Host Services:** Nginx, Docker, PostgreSQL, Redis, SSM, and CloudWatch daemons are all **RUNNING**.\n\n"
-        f"Ask specific questions like *'How many instances are running?'*, *'What are their names?'*, or *'Diagnose ALB'*."
-    )
-
-# -----------------------------------------------------------------------------
-# Dynamic SRE Chat Engine (Instant Dual-Mode)
+# Upgraded Dynamic SRE Chat Pipeline with Telemetry Routing
 # -----------------------------------------------------------------------------
 @app.post("/chat")
 @app.post("/api/ai/chat")
@@ -427,47 +745,76 @@ def generate_instant_response(prompt: str, ec2_items: list, s3_items: list, metr
 async def chat(request: ChatRequest):
     user_prompt = request.message or request.prompt or ""
 
-    metrics = get_metrics()
-    live_ec2 = fetch_live_ec2()
-    live_s3 = fetch_live_s3()
-    ec2_items = live_ec2.get("items", [])
-    s3_items = live_s3.get("items", [])
+    # Step 1: Detect intent and target resource
+    intent_meta = classify_chat_intent(user_prompt)
 
-    # Try ultra-fast Ollama call (1.5s max to prevent frontend stalls)
-    try:
-        async with httpx.AsyncClient(timeout=1.5) as client:
-            resp = await client.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json={
-                    "model": OLLAMA_MODEL,
-                    "messages": [{"role": "user", "content": user_prompt}],
-                    "stream": False,
-                    "options": {"num_predict": 80, "temperature": 0.2}
-                }
-            )
-            if resp.status_code == 200:
-                answer = resp.json().get("message", {}).get("content", "")
-                if answer and len(answer.strip()) > 10:
-                    return {
-                        "reply": answer,
-                        "response": answer,
-                        "message": answer,
-                        "content": answer,
-                        "source": f"ollama-{OLLAMA_MODEL}",
-                        "model": OLLAMA_MODEL
+    # Step 2: Fetch only the relevant telemetry for this resource
+    telemetry_bundle = dispatch_telemetry_collection(intent_meta)
+
+    # Step 3: Build Grounded System Context
+    prompt_lines = [
+        "You are CloudOps AI, an expert Principal Site Reliability Engineer (SRE).",
+        "Analyze the user query based ONLY on the grounded live AWS telemetry provided below.",
+        "CORE SRE RULES:",
+        "1. Never guess or hallucinate live metrics.",
+        "2. If telemetry status is 'UNAVAILABLE', inform the user that live AWS credentials or permissions are not present, then provide manual verification AWS CLI commands.",
+        "3. Never provide OS-level Linux commands (e.g. ps aux, systemctl, kill) for AWS-managed services like ALB, RDS, or S3. Provide AWS CLI commands instead.",
+        "4. For EC2 host issues, provide structured 3-tier troubleshooting (Processes, Services, Auto Scaling).",
+        "",
+        "--- TARGETED TELEMETRY CONTEXT ---",
+        json.dumps(telemetry_bundle, indent=2),
+        "----------------------------------"
+    ]
+    system_prompt = "\n".join(prompt_lines)
+
+    messages = [{"role": "system", "content": system_prompt}]
+    client_history = request.history or request.messages or []
+    for h in client_history[-6:]:
+        messages.append({"role": h.role, "content": h.content})
+    messages.append({"role": "user", "content": user_prompt})
+
+    endpoints = [
+        f"{OLLAMA_BASE_URL}/api/chat",
+        "http://127.0.0.1:11434/api/chat",
+        "http://host.docker.internal:11434/api/chat",
+        "http://172.17.0.1:11434/api/chat"
+    ]
+
+    for ep in endpoints:
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                res = await client.post(
+                    ep,
+                    json={
+                        "model": OLLAMA_MODEL,
+                        "messages": messages,
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.2,
+                            "num_predict": 350,
+                            "num_ctx": 8192
+                        }
                     }
-    except Exception:
-        pass
+                )
+                if res.status_code == 200:
+                    content = res.json().get("message", {}).get("content", "")
+                    if content and content.strip():
+                        return {
+                            "reply": content,
+                            "response": content,
+                            "message": content,
+                            "content": content,
+                            "source": f"ollama-{OLLAMA_MODEL}",
+                            "model": OLLAMA_MODEL,
+                            "intent_detected": intent_meta["primary_resource"]
+                        }
+        except Exception:
+            continue
 
-    # Instant sub-second contextual response
-    instant_reply = generate_instant_response(user_prompt, ec2_items, s3_items, metrics)
     return {
-        "reply": instant_reply,
-        "response": instant_reply,
-        "message": instant_reply,
-        "content": instant_reply,
-        "source": "CloudOps-SRE-Engine",
-        "model": "qwen2.5-coder:0.5b"
+        "reply": "⚠️ Ollama inference request failed to reach the server. Please ensure Ollama is active on port 11434.",
+        "response": "⚠️ Ollama inference request failed to reach the server. Please ensure Ollama is active on port 11434.",
+        "source": "error"
     }
 
 # -----------------------------------------------------------------------------
