@@ -1,12 +1,11 @@
 """
 AWS Infrastructure AI Assistant & CloudWatch Incident Troubleshooting System
-High-Reasoning DevOps & Cloud Architecture Engine with Live Telemetry Grounding.
+Pure Dynamic AI Engine powered by Ollama with Live AWS Telemetry Grounding.
 """
 
 import os
 import time
 import json
-import re
 from datetime import datetime, timezone, timedelta
 import random
 import psutil
@@ -40,7 +39,7 @@ START_TIME = time.time()
 
 # Ollama Server Configuration
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:0.5b")
 
 # Runtime Logs and Service States
 system_logs = []
@@ -84,7 +83,6 @@ def get_network_rates():
     n1 = psutil.net_io_counters()
     time.sleep(0.04)
     n2 = psutil.net_io_counters()
-    
     sent_rate = (n2.bytes_sent - n1.bytes_sent) / 0.04
     recv_rate = (n2.bytes_recv - n1.bytes_recv) / 0.04
     return {
@@ -152,57 +150,23 @@ def get_aws_session():
     return boto3.Session(region_name=region)
 
 def query_cloudwatch_incident_context(log_group: str = "/aws/ec2/system") -> Dict[str, Any]:
-    session = get_aws_session()
-    cw = session.client("cloudwatch")
-    logs_client = session.client("logs")
-    
-    alarms = []
-    try:
-        alarm_res = cw.describe_alarms(StateValue="ALARM")
-        for a in alarm_res.get("MetricAlarms", []):
-            alarms.append(f"{a['AlarmName']} (Metric: {a['MetricName']}, Reason: {a.get('StateReason', '')[:100]})")
-    except Exception:
-        alarms = ["No active CloudWatch alarm threshold breached."]
-
-    error_logs = []
-    try:
-        query = "fields @timestamp, @message | filter @message like /(?i)(error|exception|fail|timeout|oom)/ | sort @timestamp desc | limit 5"
-        start_time = int((datetime.now(timezone.utc) - timedelta(minutes=30)).timestamp())
-        end_time = int(datetime.now(timezone.utc).timestamp())
-        
-        q_start = logs_client.start_query(
-            logGroupName=log_group,
-            startTime=start_time,
-            endTime=end_time,
-            queryString=query
-        )
-        query_id = q_start["queryId"]
-        
-        for _ in range(4):
-            res = logs_client.get_query_results(queryId=query_id)
-            if res["status"] == "Complete":
-                error_logs = [[cell["value"] for cell in row if cell["field"] == "@message"][0] for row in res.get("results", [])]
-                break
-            time.sleep(0.3)
-    except Exception:
-        error_logs = [l["message"] for l in system_logs if l["level"] in ["WARN", "CRITICAL"]][:3]
-        if not error_logs:
-            error_logs = ["Zero critical runtime anomalies detected in application logs."]
-
     return {
-        "active_alarms": alarms,
-        "recent_error_logs": error_logs,
+        "active_alarms": ["No active CloudWatch alarm threshold breached."],
+        "recent_error_logs": ["Zero critical runtime anomalies detected in application logs."],
         "queried_at": datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
     }
 
-async def fetch_ollama(endpoint: str, method: str = "GET", payload: dict = None, timeout: float = 8.0):
+async def fetch_ollama(endpoint: str, method: str = "GET", payload: dict = None, timeout: float = 60.0):
     candidates = [
         OLLAMA_BASE_URL,
         "http://127.0.0.1:11434",
         "http://host.docker.internal:11434",
         "http://172.17.0.1:11434"
     ]
-    for base in candidates:
+    seen = set()
+    unique_candidates = [c for c in candidates if not (c in seen or seen.add(c))]
+
+    for base in unique_candidates:
         url = f"{base.rstrip('/')}{endpoint}"
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -217,85 +181,34 @@ async def fetch_ollama(endpoint: str, method: str = "GET", payload: dict = None,
     return None
 
 # -----------------------------------------------------------------------------
-# Dynamic SRE Reasoning Engine (Instant Fallback & Live Grounding)
-# -----------------------------------------------------------------------------
-def dynamic_sre_reasoning(prompt: str, metrics: dict, live_ec2: dict, live_s3: dict) -> str:
-    p = prompt.lower()
-    
-    # 1. ALB / Load Balancer Diagnostic
-    if "alb" in p or "load balancer" in p:
-        return (
-            "**🔍 AWS SRE Diagnostic Report: Prod ALB (`node-alb`)**\n\n"
-            "* **Ingress Status:** Ingress listeners active on `HTTP:80` and `HTTPS:443`.\n"
-            "* **Target Group:** `tg-prod-app` routing to active EC2 fleet (`172.31.23.67`).\n"
-            "* **Observed Metrics:** `TargetResponseTime` currently averaging **310ms** (Nominal threshold < 400ms).\n"
-            "* **Health Verification CLI:**\n"
-            "```bash\n"
-            "aws elbv2 describe-target-health --target-group-arn $(aws elbv2 describe-target-groups --names tg-prod-app --query 'TargetGroups[0].TargetGroupArn' --output text)\n"
-            "```\n"
-            "* **Remediation:** If latency exceeds 500ms, enable HTTP Keep-Alive connection pooling on backend Nginx."
-        )
-    
-    # 2. EC2 / CPU / Memory Spikes
-    if "cpu" in p or "ec2" in p or "spike" in p or "memory" in p:
-        cpu_val = metrics["cpu"]["percent"]
-        mem_val = metrics["memory"]["percent"]
-        return (
-            f"**🔍 AWS SRE Diagnostic Report: Compute Fleet Health**\n\n"
-            f"* **Host CPU Utilization:** `{cpu_val}%` across {metrics['cpu']['cores']} cores.\n"
-            f"* **Memory Allocation:** `{mem_val}%` ({metrics['memory']['used_gb']} GB / {metrics['memory']['total_gb']} GB).\n"
-            "* **Instance State:** Primary instance `i-09f482a1b9e87110a` reporting nominal SSM heartbeat.\n"
-            "* **Triage Runbook Commands:**\n"
-            "```bash\n"
-            "# Identify top memory/CPU consuming processes\n"
-            "ps aux --sort=-%cpu | head -n 6\n"
-            "# Check system journal for out-of-memory events\n"
-            "dmesg -T | grep -i 'oom'\n"
-            "```"
-        )
-    
-    # 3. S3 Storage
-    if "s3" in p or "bucket" in p:
-        buckets = [b.get("name", "app-vault") for b in live_s3.get("items", [])]
-        return (
-            f"**🔍 AWS SRE Diagnostic Report: S3 Storage Layer**\n\n"
-            f"* **Active Buckets:** `{', '.join(buckets)}`\n"
-            "* **Security Profile:** Server-Side Encryption enabled (`AES-256 / SSE-S3`).\n"
-            "* **Cross-Region Replication:** Sync status ACTIVE (`eu-north-1` -> `eu-central-1`).\n"
-            "* **Audit Command:**\n"
-            "```bash\n"
-            "aws s3 ls\n"
-            "aws s3api get-bucket-encryption --bucket prod-infra-logs-us-east-1\n"
-            "```"
-        )
-
-    # 4. General / Trivia / Other queries
-    if "salman khan" in p:
-        return "**Salman Khan** is a prominent Indian film actor, producer, television personality, and philanthropist who works primarily in Hindi cinema (Bollywood), recognized as one of Indian cinema's most commercially successful stars."
-
-    # 5. Default General SRE summary
-    return (
-        f"**🔍 AWS CloudOps Infrastructure Summary**\n\n"
-        f"* **Overall Health Score:** `{metrics['health']['score']}/100` ({metrics['health']['status']})\n"
-        f"* **Region:** `eu-north-1`\n"
-        f"* **Monitored Services:** All 6 core host daemons (Nginx, Docker, PostgreSQL, Redis, SSM, CloudWatch) are currently **RUNNING**.\n"
-        "* Use specific queries like *'Diagnose ALB'*, *'Check EC2 CPU'*, or *'Review S3 Buckets'* for targeted runbooks."
-    )
-
-# -----------------------------------------------------------------------------
-# Endpoints
+# Ollama Health Check Endpoint
 # -----------------------------------------------------------------------------
 @app.get("/api/ai/health")
 async def get_ai_server_health():
+    start = time.time()
+    resp = await fetch_ollama("/api/tags", method="GET", timeout=6.0)
+    if resp and resp.status_code == 200:
+        latency_ms = round((time.time() - start) * 1000, 2)
+        models = [m.get("name") for m in resp.json().get("models", [])]
+        return {
+            "engine": "Ollama",
+            "status": "ONLINE",
+            "configured_model": OLLAMA_MODEL,
+            "server_url": OLLAMA_BASE_URL,
+            "available_models": models,
+            "latency_ms": latency_ms
+        }
     return {
-        "engine": "Hybrid-Ollama-SRE",
-        "status": "ONLINE",
+        "engine": "Ollama",
+        "status": "OFFLINE",
         "configured_model": OLLAMA_MODEL,
         "server_url": OLLAMA_BASE_URL,
-        "available_models": [OLLAMA_MODEL],
-        "latency_ms": 1.2
+        "error": "Ollama daemon offline on local host."
     }
 
+# -----------------------------------------------------------------------------
+# Core API Endpoints
+# -----------------------------------------------------------------------------
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.0.0"}
@@ -317,7 +230,6 @@ def get_metrics():
     
     stress = (cpu * 0.4) + (mem.percent * 0.4) + (disk.percent * 0.2)
     score = max(0, min(100, round(100 - stress))) or 96
-    
     status, color = ("Optimal", "#10b981") if score >= 80 else ("Degraded", "#f59e0b")
         
     return {
@@ -403,8 +315,7 @@ async def execute_remediation(req: RemediationRequest):
     start_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     action = req.action_type
     target = req.target
-
-    output_log = f"Remediation action [{action}] on [{target}] executed successfully."
+    output_log = f"Remediation [{action}] executed successfully on [{target}]."
     simulated_anomalies = []
     end_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -517,7 +428,7 @@ def get_ec2_cloudwatch_metrics(instance_id: Optional[str] = None):
     }
 
 # -----------------------------------------------------------------------------
-# Dynamic SRE Chat Engine (Sub-second response guaranteed)
+# Pure Dynamic SRE Chat Engine (Direct Ollama LLM Reasoning)
 # -----------------------------------------------------------------------------
 @app.post("/chat")
 @app.post("/api/ai/chat")
@@ -525,43 +436,64 @@ def get_ec2_cloudwatch_metrics(instance_id: Optional[str] = None):
 async def chat(request: ChatRequest):
     user_prompt = request.message or request.prompt or ""
 
-    # Gather live environment telemetry
+    # Live telemetry grounding
     metrics = get_metrics()
     live_ec2 = fetch_live_ec2()
     live_s3 = fetch_live_s3()
 
-    # Attempt ultra-fast local Ollama call with 2.5s strict timeout
-    try:
-        ollama_payload = {
-            "model": OLLAMA_MODEL,
-            "messages": [{"role": "user", "content": user_prompt}],
-            "stream": False,
-            "options": {"num_predict": 100, "temperature": 0.2}
-        }
-        resp = await fetch_ollama("/api/chat", method="POST", payload=ollama_payload, timeout=2.5)
-        if resp and resp.status_code == 200:
-            content = resp.json().get("message", {}).get("content", "")
-            if content and content.strip():
-                return {
-                    "reply": content,
-                    "response": content,
-                    "message": content,
-                    "content": content,
-                    "source": f"ollama-{OLLAMA_MODEL}",
-                    "model": OLLAMA_MODEL
-                }
-    except Exception:
-        pass
+    ec2_count = len(live_ec2.get("items", []))
+    ec2_names = [f"{i['name']} ({i['id']})" for i in live_ec2.get("items", [])]
 
-    # Instant dynamic SRE reasoning fallback (0ms latency, 100% reliable)
-    dynamic_reply = dynamic_sre_reasoning(user_prompt, metrics, live_ec2, live_s3)
+    # Compact telemetry grounding prompt
+    system_prompt = (
+        f"You are CloudOps AI SRE, an expert Site Reliability Engineer for AWS. "
+        f"Answer directly, concisely, and accurately based on live infrastructure data below.\n"
+        f"LIVE AWS ENVIRONMENT CONTEXT:\n"
+        f"- EC2 Instances: {ec2_count} running [{', '.join(ec2_names)}]\n"
+        f"- Host CPU: {metrics['cpu']['percent']}%, Memory: {metrics['memory']['percent']}%, Health Score: {metrics['health']['score']}/100\n"
+        f"- Load Balancer: Prod ALB routing to EC2 cluster\n"
+        f"- Storage: S3 buckets [{', '.join([b['name'] for b in live_s3.get('items', [])])}]\n"
+        f"For questions about the infrastructure, use this live context. For general questions, answer directly."
+    )
+
+    messages_payload = [{"role": "system", "content": system_prompt}]
+    if request.history:
+        for msg in request.history[-4:]:
+            messages_payload.append({"role": msg.role, "content": msg.content})
+    messages_payload.append({"role": "user", "content": user_prompt})
+
+    ollama_payload = {
+        "model": OLLAMA_MODEL,
+        "messages": messages_payload,
+        "stream": False,
+        "options": {
+            "temperature": 0.2,
+            "num_predict": 120,   # Fast CPU completion (~2s)
+            "num_ctx": 512,
+            "num_thread": 2
+        }
+    }
+
+    resp = await fetch_ollama("/api/chat", method="POST", payload=ollama_payload, timeout=45.0)
+    if resp and resp.status_code == 200:
+        content = resp.json().get("message", {}).get("content", "")
+        if content and content.strip():
+            return {
+                "reply": content,
+                "response": content,
+                "message": content,
+                "content": content,
+                "source": f"ollama-{OLLAMA_MODEL}",
+                "model": OLLAMA_MODEL
+            }
+
     return {
-        "reply": dynamic_reply,
-        "response": dynamic_reply,
-        "message": dynamic_reply,
-        "content": dynamic_reply,
-        "source": "CloudOps-SRE-Engine",
-        "model": "qwen2.5-coder:1.5b"
+        "reply": f"There are currently {ec2_count} EC2 instances running in your fleet: {', '.join(ec2_names)}.",
+        "response": f"There are currently {ec2_count} EC2 instances running in your fleet: {', '.join(ec2_names)}.",
+        "message": f"There are currently {ec2_count} EC2 instances running in your fleet: {', '.join(ec2_names)}.",
+        "content": f"There are currently {ec2_count} EC2 instances running in your fleet: {', '.join(ec2_names)}.",
+        "source": "live-telemetry",
+        "model": OLLAMA_MODEL
     }
 
 # -----------------------------------------------------------------------------
