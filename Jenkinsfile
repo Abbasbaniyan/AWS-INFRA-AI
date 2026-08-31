@@ -8,9 +8,9 @@ pipeline {
         HOST_PORT          = '8000'
         CONTAINER_PORT     = '8000'
         AWS_DEFAULT_REGION = 'eu-north-1'
-        // Replace with your Server 2 Private IP
-        OLLAMA_BASE_URL    = 'http://172.31.38.194:11434'
-        OLLAMA_MODEL = 'qwen2.5-coder:7b'
+        // EC2 Private IP running Ollama
+        OLLAMA_BASE_URL    = 'http://172.31.23.67:11434'
+        OLLAMA_MODEL       = 'qwen2.5-coder:7b'
     }
 
     stages {
