@@ -488,7 +488,7 @@ def fetch_live_ec2():
                 })
         if items:
             return {"items": items, "source": "aws-boto3"}
-    except Exception as e:
+    except Exception:
         pass
     
     return {
@@ -539,7 +539,7 @@ def fetch_live_s3():
 
         if items:
             return {"items": items, "source": "aws-boto3"}
-    except Exception as e:
+    except Exception:
         pass
         
     return {
@@ -571,7 +571,7 @@ def fetch_live_vpcs():
             })
         if items:
             return {"items": items, "source": "aws-boto3"}
-    except Exception as e:
+    except Exception:
         pass
         
     return {
@@ -601,7 +601,7 @@ def fetch_live_iam():
             })
         if items:
             return {"items": items, "source": "aws-boto3"}
-    except Exception as e:
+    except Exception:
         pass
         
     return {
@@ -783,9 +783,70 @@ async def chat(request: ChatRequest):
 
     infra_graph_json = json.dumps(infra_graph, indent=2)
 
-    system_prompt = f"""You are CloudOps AI SRE, an expert Principal Site Reliability Engineer and AWS Cloud Architect.
+    prompt_lines = [
+        "You are CloudOps AI SRE, an expert Principal Site Reliability Engineer and AWS Cloud Architect.",
+        "",
+        "You have direct access to the live AWS infrastructure environment and telemetry snapshot below:",
+        "",
+        infra_graph_json,
+        "",
+        "CORE DIRECTIVES:",
+        "1. UNDERSTAND FIRST: Analyze the user's question, determine the exact AWS resource or topic being asked about (ALB, S3, RDS, EC2, CloudFront, VPC, Auto-Scaling, etc.).",
+        "2. RESOURCE-ACCURATE DIAGNOSTICS:",
+        "   - If asked about an ALB / Load Balancer: Analyze listener ports, target groups, target health checks (`aws elbv2 describe-target-health`), 5XX/4XX HTTP error metrics, and ALB latency. NEVER give Linux host commands (`ps aux`, `kill`, `systemctl`) for managed ALBs.",
+        "   - If asked about S3: Analyze bucket policies, access control, SSE encryption, and bucket size metrics (`aws s3 ls`).",
+        "   - If asked about RDS: Analyze PostgreSQL replication lag, connection pools, and IOPS.",
+        "   - If asked about EC2 / Host CPU/RAM spikes: Formulate an exact 3-tier triage plan (PIDs, service restart, ASG horizontal scaling).",
+        "3. NO HARDCODED OR SCRIPTED ANSWERS: Dynamically reason about the live JSON telemetry state and generate precise, actionable AWS CLI, Linux, or architectural solutions.",
+        "4. BE CONCISE & PROFESSIONAL: Format responses with clean Markdown headers, bullet points, and syntax-highlighted bash commands."
+    ]
+    system_prompt = "\n".join(prompt_lines)
 
-You have direct access to the live AWS infrastructure environment and telemetry snapshot below:
+    messages_payload = [{"role": "system", "content": system_prompt}]
+    if request.history:
+        for msg in request.history[-6:]:
+            messages_payload.append({"role": msg.role, "content": msg.content})
+    messages_payload.append({"role": "user", "content": request.message})
 
-```json
-{infra_graph_json}
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            ollama_payload = {
+                "model": OLLAMA_MODEL,
+                "messages": messages_payload,
+                "stream": False,
+                "options": {
+                    "temperature": 0.3,
+                    "num_ctx": 4096
+                }
+            }
+            res = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=ollama_payload)
+            if res.status_code == 200:
+                content = res.json().get("message", {}).get("content", "")
+                if content and content.strip():
+                    return {
+                        "reply": content,
+                        "source": f"ollama-{OLLAMA_MODEL}",
+                        "model": OLLAMA_MODEL
+                    }
+    except Exception as e:
+        print(f"⚠️ Ollama inference error: {e}")
+
+    return {
+        "reply": f"⚠️ **AI Engine Notice:** Unable to reach the local inference server at `{OLLAMA_BASE_URL}` running `{OLLAMA_MODEL}`. Please ensure Ollama is running (`ollama serve`) and the model is pulled (`ollama pull {OLLAMA_MODEL}`).",
+        "source": "system-alert",
+        "model": OLLAMA_MODEL
+    }
+
+# -----------------------------------------------------------------------------
+# Static Asset Serving
+# -----------------------------------------------------------------------------
+os.makedirs("static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+def serve_index():
+    return FileResponse("static/index.html")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
