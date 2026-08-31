@@ -38,9 +38,9 @@ app.add_middleware(
 
 START_TIME = time.time()
 
-# Ollama Server Configuration (Supports Host Docker and Local fallback)
+# Ollama Server Configuration (Ultra-lightweight 0.5b for fast CPU responses)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:0.5b")
 
 # Runtime Logs and Service States
 system_logs = []
@@ -195,8 +195,7 @@ def query_cloudwatch_incident_context(log_group: str = "/aws/ec2/system") -> Dic
         "queried_at": datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
     }
 
-# Helper to connect to Ollama across host/container endpoints
-async def fetch_ollama(endpoint: str, method: str = "GET", payload: dict = None, timeout: float = 120.0):
+async def fetch_ollama(endpoint: str, method: str = "GET", payload: dict = None, timeout: float = 90.0):
     candidates = [
         OLLAMA_BASE_URL,
         "http://127.0.0.1:11434",
@@ -243,7 +242,7 @@ async def get_ai_server_health():
         "status": "OFFLINE",
         "configured_model": OLLAMA_MODEL,
         "server_url": OLLAMA_BASE_URL,
-        "error": "Unable to connect to Ollama daemon on local host ports."
+        "error": "Unable to reach local Ollama daemon."
     }
 
 # -----------------------------------------------------------------------------
@@ -749,32 +748,19 @@ def get_ec2_cloudwatch_metrics(instance_id: Optional[str] = None):
     }
 
 # -----------------------------------------------------------------------------
-# Dynamic SRE Chat Engine
+# Dynamic SRE Chat Engine (Fast, Dynamic Inference with no static mock)
 # -----------------------------------------------------------------------------
 @app.post("/chat")
 @app.post("/api/ai/chat")
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     user_prompt = request.message or request.prompt or ""
-    
-    # Generate direct, instant fallback if inference takes too long
-    fallback_response = (
-        "### 🔍 AWS SRE Diagnostic Report\n\n"
-        "**Target:** `Prod ALB (node-alb)`\n"
-        "**Status:** Nominal / Active Ingress\n\n"
-        "**Telemetry & Recommendations:**\n"
-        "- **Listener Status:** HTTP:80 & HTTPS:443 routing to `tg-prod-app`.\n"
-        "- **Latency Check:** `TargetResponseTime` spike observed (~310ms).\n"
-        "- **Target Health:** Run AWS CLI verification to confirm targets are healthy:\n"
-        "```bash\n"
-        "aws elbv2 describe-target-health --target-group-arn <tg-arn>\n"
-        "```\n"
-        "- **Action:** Check EC2 cluster backend connection queue and scale if request load exceeds 1,500 req/sec."
-    )
 
     system_prompt = (
-        "You are CloudOps AI SRE, an expert Principal Site Reliability Engineer. "
-        "Analyze the user query concisely using AWS best practices, Markdown headers, and CLI commands."
+        "You are CloudOps AI SRE, a helpful and knowledgeable DevOps Assistant. "
+        "Answer the user's question directly and concisely. "
+        "For AWS questions, provide practical diagnostic steps and AWS CLI commands. "
+        "For general knowledge questions, answer them accurately and politely."
     )
 
     messages_payload = [{"role": "system", "content": system_prompt}]
@@ -788,32 +774,35 @@ async def chat(request: ChatRequest):
         "messages": messages_payload,
         "stream": False,
         "options": {
-            "temperature": 0.2,
+            "temperature": 0.3,
+            "num_predict": 180,
             "num_ctx": 1024,
-            "num_predict": 300
+            "num_thread": 2
         }
     }
 
-    resp = await fetch_ollama("/api/chat", method="POST", payload=ollama_payload, timeout=60.0)
-    if resp and resp.status_code == 200:
-        content = resp.json().get("message", {}).get("content", "")
-        if content and content.strip():
-            return {
-                "reply": content,
-                "response": content,
-                "message": content,
-                "content": content,
-                "source": f"ollama-{OLLAMA_MODEL}",
-                "model": OLLAMA_MODEL
-            }
+    try:
+        resp = await fetch_ollama("/api/chat", method="POST", payload=ollama_payload, timeout=90.0)
+        if resp and resp.status_code == 200:
+            content = resp.json().get("message", {}).get("content", "")
+            if content and content.strip():
+                return {
+                    "reply": content,
+                    "response": content,
+                    "message": content,
+                    "content": content,
+                    "source": f"ollama-{OLLAMA_MODEL}",
+                    "model": OLLAMA_MODEL
+                }
+    except Exception as e:
+        print(f"Ollama inference error: {e}")
 
-    # Immediate fallback response to ensure UI displays diagnostic results
     return {
-        "reply": fallback_response,
-        "response": fallback_response,
-        "message": fallback_response,
-        "content": fallback_response,
-        "source": "CloudOps-SRE-Engine",
+        "reply": f"⚠️ Inference engine is busy processing. Please ensure '{OLLAMA_MODEL}' is pulled and retry.",
+        "response": f"⚠️ Inference engine is busy processing. Please ensure '{OLLAMA_MODEL}' is pulled and retry.",
+        "message": f"⚠️ Inference engine is busy processing. Please ensure '{OLLAMA_MODEL}' is pulled and retry.",
+        "content": f"⚠️ Inference engine is busy processing. Please ensure '{OLLAMA_MODEL}' is pulled and retry.",
+        "source": "system-alert",
         "model": OLLAMA_MODEL
     }
 
