@@ -1,6 +1,7 @@
 """
 AWS Infrastructure AI Assistant & CloudWatch Incident Troubleshooting System
-Module 1: Intent & Resource Detection with Targeted Boto3 Telemetry Collectors.
+Module 1 (Calibrated): Intent & Resource Detection with Targeted Boto3 Telemetry Collectors.
+Optimized for Fast CPU Inference (num_ctx: 2048, num_predict: 150).
 """
 
 import os
@@ -26,7 +27,7 @@ load_dotenv()
 app = FastAPI(
     title="AWS Infrastructure AI Assistant API",
     description="Dynamic CloudOps AI engine with targeted AWS telemetry grounding.",
-    version="3.1.0"
+    version="3.1.1"
 )
 
 app.add_middleware(
@@ -262,7 +263,6 @@ def collect_alb_telemetry(target_hint: Optional[str] = None) -> Dict[str, Any]:
     except (ClientError, BotoCoreError, NoCredentialsError) as err:
         result["collection_status"] = "UNAVAILABLE"
         result["error"] = f"AWS API Error: {str(err)}"
-        # Structured mock context for demonstration only
         result["demo_mock_context"] = {
             "load_balancers": [{"name": "node-alb", "state": "active", "type": "application", "scheme": "internet-facing"}],
             "target_groups": [{"name": "tg-prod-app", "protocol": "HTTP", "port": 8000, "health_check_path": "/health"}],
@@ -396,7 +396,6 @@ def collect_cloudwatch_telemetry(target_hint: Optional[str] = None) -> Dict[str,
         cw = session.client("cloudwatch")
         logs = session.client("logs")
         
-        # Describe active alarms
         alarm_res = cw.describe_alarms(StateValue="ALARM")
         for a in alarm_res.get("MetricAlarms", []):
             result["alarms_in_alarm"].append({
@@ -406,7 +405,6 @@ def collect_cloudwatch_telemetry(target_hint: Optional[str] = None) -> Dict[str,
                 "reason": a.get("StateReason", "")[:150]
             })
             
-        # Log query sample
         q_start = logs.start_query(
             logGroupName="/aws/ec2/system",
             startTime=int((datetime.now(timezone.utc) - timedelta(minutes=15)).timestamp()),
@@ -556,7 +554,7 @@ async def get_ai_server_health():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.1.0"}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.1.1"}
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
@@ -737,7 +735,7 @@ def get_ec2_cloudwatch_metrics(instance_id: Optional[str] = None):
     }
 
 # -----------------------------------------------------------------------------
-# Upgraded Dynamic SRE Chat Pipeline with Telemetry Routing
+# Upgraded Dynamic SRE Chat Pipeline with Telemetry Routing & Fast CPU Tuning
 # -----------------------------------------------------------------------------
 @app.post("/chat")
 @app.post("/api/ai/chat")
@@ -751,7 +749,7 @@ async def chat(request: ChatRequest):
     # Step 2: Fetch only the relevant telemetry for this resource
     telemetry_bundle = dispatch_telemetry_collection(intent_meta)
 
-    # Step 3: Build Grounded System Context
+    # Step 3: Build Grounded System Context (Concise formatting for fast tokenization)
     prompt_lines = [
         "You are CloudOps AI, an expert Principal Site Reliability Engineer (SRE).",
         "Analyze the user query based ONLY on the grounded live AWS telemetry provided below.",
@@ -760,6 +758,7 @@ async def chat(request: ChatRequest):
         "2. If telemetry status is 'UNAVAILABLE', inform the user that live AWS credentials or permissions are not present, then provide manual verification AWS CLI commands.",
         "3. Never provide OS-level Linux commands (e.g. ps aux, systemctl, kill) for AWS-managed services like ALB, RDS, or S3. Provide AWS CLI commands instead.",
         "4. For EC2 host issues, provide structured 3-tier troubleshooting (Processes, Services, Auto Scaling).",
+        "5. Keep responses concise, direct, and focused on action items.",
         "",
         "--- TARGETED TELEMETRY CONTEXT ---",
         json.dumps(telemetry_bundle, indent=2),
@@ -769,7 +768,7 @@ async def chat(request: ChatRequest):
 
     messages = [{"role": "system", "content": system_prompt}]
     client_history = request.history or request.messages or []
-    for h in client_history[-6:]:
+    for h in client_history[-4:]:
         messages.append({"role": h.role, "content": h.content})
     messages.append({"role": "user", "content": user_prompt})
 
@@ -791,8 +790,9 @@ async def chat(request: ChatRequest):
                         "stream": False,
                         "options": {
                             "temperature": 0.2,
-                            "num_predict": 350,
-                            "num_ctx": 8192
+                            "num_predict": 150,     # Limits generation length for fast CPU completion
+                            "num_ctx": 2048,        # Drops KV-cache overhead by 75% compared to 8192
+                            "num_thread": 2         # Maximizes CPU thread utilization
                         }
                     }
                 )
