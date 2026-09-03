@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 import random
 import psutil
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -26,7 +26,7 @@ load_dotenv()
 app = FastAPI(
     title="AWS Infrastructure AI Assistant API",
     description="Dynamic CloudOps AI engine with targeted AWS telemetry grounding.",
-    version="3.2.1"
+    version="3.3.0"
 )
 
 app.add_middleware(
@@ -60,6 +60,10 @@ incident_history = []
 # -----------------------------------------------------------------------------
 # Data Models
 # -----------------------------------------------------------------------------
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 class ChatMessage(BaseModel):
     role: str
     content: str
@@ -158,6 +162,24 @@ def get_top_procs(limit: int = 6):
             continue
     procs.sort(key=lambda x: x["cpu_percent"] + x["memory_percent"], reverse=True)
     return procs[:limit]
+
+# -----------------------------------------------------------------------------
+# Authentication Endpoint
+# -----------------------------------------------------------------------------
+@app.post("/api/auth/login")
+def auth_login(req: LoginRequest):
+    auth_user = os.getenv("AUTH_USERNAME", "admin")
+    auth_pass = os.getenv("AUTH_PASSWORD", "cloudops2026")
+    
+    if req.username == auth_user and req.password == auth_pass:
+        log_event("INFO", "AuthService", f"User '{req.username}' logged in successfully.")
+        return {
+            "status": "success",
+            "token": f"token-{int(time.time()*1000)}",
+            "user": {"username": req.username, "role": "DevOps Admin"}
+        }
+    log_event("WARN", "AuthService", f"Failed authentication attempt for user '{req.username}'.")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
 # -----------------------------------------------------------------------------
 # MODULE 1: Deterministic Intent & Resource Classifier
@@ -264,7 +286,6 @@ def collect_alb_telemetry(target_hint: Optional[str] = None) -> Dict[str, Any]:
         elbv2 = session.client("elbv2")
         cw = session.client("cloudwatch")
         
-        # 1. Describe Load Balancers
         lbs = elbv2.describe_load_balancers().get("LoadBalancers", [])
         for lb in lbs:
             result["load_balancers"].append({
@@ -273,7 +294,6 @@ def collect_alb_telemetry(target_hint: Optional[str] = None) -> Dict[str, Any]:
                 "scheme": lb.get("Scheme")
             })
             
-        # 2. Describe Target Groups & Target Health
         tgs = elbv2.describe_target_groups().get("TargetGroups", [])
         for tg in tgs:
             tg_arn = tg.get("TargetGroupArn")
@@ -296,7 +316,6 @@ def collect_alb_telemetry(target_hint: Optional[str] = None) -> Dict[str, Any]:
             except Exception as e:
                 result["target_health"].append({"tg": tg.get("TargetGroupName"), "error": str(e)})
 
-        # 3. CloudWatch Latency & 5XX Metrics
         if lbs:
             lb_dim = "/".join(lbs[0]["LoadBalancerArn"].split("/")[-3:])
             end_t = datetime.now(timezone.utc)
@@ -461,7 +480,7 @@ def collect_cloudwatch_telemetry(target_hint: Optional[str] = None) -> Dict[str,
     return result
 
 # -----------------------------------------------------------------------------
-# Telemetry Dispatcher (Executes ONLY Relevant Collector)
+# Telemetry Dispatcher
 # -----------------------------------------------------------------------------
 def dispatch_telemetry_collection(intent_meta: Dict[str, Any]) -> Dict[str, Any]:
     res_type = intent_meta["primary_resource"]
@@ -487,7 +506,7 @@ def dispatch_telemetry_collection(intent_meta: Dict[str, Any]) -> Dict[str, Any]
     return telemetry_bundle
 
 # -----------------------------------------------------------------------------
-# Existing Dashboard REST Endpoints (Preserved 100%)
+# Dashboard REST Endpoints
 # -----------------------------------------------------------------------------
 @app.get("/api/ai/health")
 async def get_ai_server_health():
@@ -517,7 +536,7 @@ async def get_ai_server_health():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.2.1"}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.3.0"}
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
@@ -534,7 +553,7 @@ def get_metrics():
     uptime_str = f"{uptime_sec // 3600}h {(uptime_sec % 3600) // 60}m {uptime_sec % 60}s"
     stress = (cpu * 0.4) + (mem.percent * 0.4) + (disk.percent * 0.2)
     score = max(0, min(100, round(100 - stress))) or 96
-    status, color = ("Optimal", "#10b981") if score >= 80 else ("Degraded", "#f59e0b")
+    status_text, color = ("Optimal", "#10b981") if score >= 80 else ("Degraded", "#f59e0b")
         
     return {
         "timestamp": datetime.now().isoformat(),
@@ -542,7 +561,7 @@ def get_metrics():
         "memory": {"percent": mem.percent, "used_gb": round(mem.used / (1024**3), 2), "total_gb": round(mem.total / (1024**3), 2), "available_gb": round(mem.available / (1024**3), 2)},
         "disk": {"percent": disk.percent, "used_gb": round(disk.used / (1024**3), 2), "total_gb": round(disk.total / (1024**3), 2), "free_gb": round(disk.free / (1024**3), 2)},
         "uptime": {"seconds": uptime_sec, "formatted": uptime_str},
-        "health": {"score": score, "status": status, "color": color, "healthy_components": 14, "warning_components": 0, "critical_components": 0},
+        "health": {"score": score, "status": status_text, "color": color, "healthy_components": 14, "warning_components": 0, "critical_components": 0},
         "network": get_network_rates(),
         "disk_io": get_disk_rates(),
         "top_processes": get_top_procs(6),
@@ -677,7 +696,6 @@ def service_action(service_name: str, payload: ServiceActionRequest):
 
 @app.get("/api/logs")
 def get_logs(limit: int = 50, level: Optional[str] = None):
-    # Automatically emit live telemetry heartbeat when UI polls logs
     if len(system_logs) < 10 or random.random() < 0.35:
         sources = ["CloudWatch", "ALB-Ingress", "EC2-SSM", "DockerEngine", "HostMetrics", "IAM-Auth"]
         msgs = [
@@ -719,13 +737,9 @@ def get_ec2_cloudwatch_metrics(instance_id: Optional[str] = None):
 async def chat(request: ChatRequest):
     user_prompt = request.message or request.prompt or ""
 
-    # Step 1: Detect intent and target resource
     intent_meta = classify_chat_intent(user_prompt)
-
-    # Step 2: Fetch only relevant telemetry for this resource
     telemetry_data = dispatch_telemetry_collection(intent_meta)
 
-    # Step 3: Compact token-efficient system prompt
     system_prompt = (
         "You are CloudOps AI, an expert Principal Site Reliability Engineer (SRE).\n"
         "Analyze the user query based ONLY on this live AWS telemetry context:\n"
@@ -736,11 +750,8 @@ async def chat(request: ChatRequest):
         "- Keep answers direct, accurate, and concise."
     )
 
-    messages = [
-        {"role": "system", "content": system_prompt}
-    ]
+    messages = [{"role": "system", "content": system_prompt}]
     
-    # Retain minimal conversational turns to protect CPU inference speed
     client_history = request.history or request.messages or []
     for h in client_history[-2:]:
         messages.append({"role": h.role, "content": h.content})

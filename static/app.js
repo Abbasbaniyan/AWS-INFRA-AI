@@ -6,11 +6,24 @@ const state = {
   chatHistory: [],
   logs: [],
   topology: null,
-  isSimulatedActive: false
+  isSimulatedActive: false,
+  isAuthenticated: false,
+  pollTimers: []
 };
 
 // DOM Selectors Cache
 const elements = {
+  authOverlay: document.getElementById('authOverlay'),
+  appLayout: document.getElementById('appLayout'),
+  loginForm: document.getElementById('loginForm'),
+  loginUsername: document.getElementById('loginUsername'),
+  loginPassword: document.getElementById('loginPassword'),
+  loginErrorMsg: document.getElementById('loginErrorMsg'),
+  loginErrorText: document.getElementById('loginErrorText'),
+  loginSubmitBtn: document.getElementById('loginSubmitBtn'),
+  logoutBtn: document.getElementById('logoutBtn'),
+  userAvatar: document.getElementById('userAvatar'),
+  userRoleText: document.getElementById('userRoleText'),
   navButtons: document.querySelectorAll('.nav-item'),
   views: {
     dashboard: document.getElementById('view-dashboard'),
@@ -75,9 +88,113 @@ function initLucide() {
 }
 
 // -----------------------------------------------------------------------------
+// Authentication Flow
+// -----------------------------------------------------------------------------
+window.handleLoginSubmit = async function(e) {
+  if (e) e.preventDefault();
+  
+  const username = elements.loginUsername.value.trim();
+  const password = elements.loginPassword.value.trim();
+  
+  if (!username || !password) return;
+
+  elements.loginSubmitBtn.disabled = true;
+  elements.loginErrorMsg.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || 'Authentication failed. Please verify credentials.');
+    }
+
+    const data = await res.json();
+    sessionStorage.setItem('aws_infra_token', data.token || 'authenticated');
+    sessionStorage.setItem('aws_infra_user', JSON.stringify(data.user || { username, role: 'DevOps Admin' }));
+    
+    unlockApplication(data.user);
+  } catch (err) {
+    elements.loginErrorText.textContent = err.message;
+    elements.loginErrorMsg.style.display = 'flex';
+  } finally {
+    elements.loginSubmitBtn.disabled = false;
+    initLucide();
+  }
+};
+
+function checkSession() {
+  const token = sessionStorage.getItem('aws_infra_token');
+  const userJson = sessionStorage.getItem('aws_infra_user');
+  
+  if (token) {
+    const user = userJson ? JSON.parse(userJson) : { username: 'admin', role: 'DevOps Admin' };
+    unlockApplication(user);
+  } else {
+    lockApplication();
+  }
+}
+
+function unlockApplication(user) {
+  state.isAuthenticated = true;
+  if (elements.authOverlay) elements.authOverlay.style.display = 'none';
+  if (elements.appLayout) elements.appLayout.style.display = 'flex';
+  
+  if (user) {
+    if (elements.userAvatar) elements.userAvatar.textContent = user.username.substring(0, 2).toUpperCase();
+    if (elements.userRoleText) elements.userRoleText.textContent = user.role || 'DevOps Admin';
+  }
+
+  startDataPolling();
+  initLucide();
+}
+
+function lockApplication() {
+  state.isAuthenticated = false;
+  stopDataPolling();
+  if (elements.appLayout) elements.appLayout.style.display = 'none';
+  if (elements.authOverlay) elements.authOverlay.style.display = 'flex';
+  if (elements.loginPassword) elements.loginPassword.value = '';
+  initLucide();
+}
+
+function startDataPolling() {
+  stopDataPolling();
+  
+  fetchMetrics();
+  fetchAnomalies();
+  fetchTopology();
+  fetchLogs();
+  fetchCloudWatchFleetMetrics();
+  fetchIncidents();
+
+  state.pollTimers.push(setInterval(fetchMetrics, 3000));
+  state.pollTimers.push(setInterval(fetchAnomalies, 4000));
+  state.pollTimers.push(setInterval(fetchLogs, 5000));
+  state.pollTimers.push(setInterval(fetchCloudWatchFleetMetrics, 30000));
+}
+
+function stopDataPolling() {
+  state.pollTimers.forEach(id => clearInterval(id));
+  state.pollTimers = [];
+}
+
+// -----------------------------------------------------------------------------
 // Navigation & Event Listeners
 // -----------------------------------------------------------------------------
 function initEventListeners() {
+  if (elements.logoutBtn) {
+    elements.logoutBtn.addEventListener('click', () => {
+      sessionStorage.removeItem('aws_infra_token');
+      sessionStorage.removeItem('aws_infra_user');
+      lockApplication();
+    });
+  }
+
   elements.navButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const view = btn.getAttribute('data-view');
@@ -179,17 +296,6 @@ function initEventListeners() {
     });
   }
 
-  window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      elements.globalSearchInput.focus();
-    }
-  });
-
-  if (elements.globalSearchInput) {
-    elements.globalSearchInput.addEventListener('input', handleGlobalSearch);
-  }
-
   if (elements.logLevelFilter) {
     elements.logLevelFilter.addEventListener('change', renderLogs);
   }
@@ -264,6 +370,7 @@ function updateDashboardUI(data) {
 }
 
 async function fetchMetrics() {
+  if (!state.isAuthenticated) return;
   try {
     const res = await fetch('/metrics');
     if (!res.ok) return;
@@ -279,6 +386,7 @@ async function fetchMetrics() {
 // Anomaly Engine & Auto-Remediation
 // -----------------------------------------------------------------------------
 async function fetchAnomalies() {
+  if (!state.isAuthenticated) return;
   try {
     const res = await fetch('/api/anomalies');
     if (!res.ok) return;
@@ -399,6 +507,7 @@ function renderProcesses(processes) {
 // Infrastructure Topology Map
 // -----------------------------------------------------------------------------
 async function fetchTopology() {
+  if (!state.isAuthenticated) return;
   try {
     const res = await fetch('/api/topology');
     if (!res.ok) return;
@@ -419,7 +528,6 @@ function renderTopology(topology) {
   const nodes = topology.nodes || [];
   const links = topology.links || [];
 
-  // Ensure explicit spaces between viewBox values
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   let svgHtml = '<g id="topology-graph-root">';
 
@@ -474,6 +582,7 @@ window.inspectNode = function(nodeId) {
 // Live Log Stream
 // -----------------------------------------------------------------------------
 async function fetchLogs() {
+  if (!state.isAuthenticated) return;
   try {
     const filter = elements.logLevelFilter ? elements.logLevelFilter.value : 'ALL';
     const res = await fetch(`/api/logs?level=${filter}`);
@@ -508,7 +617,7 @@ function renderLogs() {
 }
 
 // -----------------------------------------------------------------------------
-// AWS Resource Catalog Tables (EC2, VPC, S3, IAM, Services)
+// AWS Resource Catalog Tables
 // -----------------------------------------------------------------------------
 async function renderResourceTable(type) {
   switchView(type);
@@ -648,25 +757,6 @@ window.sendPromptToAi = function(promptText) {
   sendAiMessage();
 };
 
-function handleGlobalSearch(e) {
-  const q = e.target.value.toLowerCase().trim();
-  const dropdown = elements.searchResultsDropdown;
-
-  if (!q) {
-    dropdown.style.display = 'none';
-    dropdown.innerHTML = '';
-    return;
-  }
-
-  dropdown.style.display = 'flex';
-  dropdown.innerHTML = `
-    <div class="search-res-item" onclick="sendPromptToAi('Audit search target: ${q}')">
-      <span>🔍 Search AWS Infra for "<strong>${q}</strong>"</span>
-      <span class="anomaly-resource-tag">Action</span>
-    </div>
-  `;
-}
-
 function formatMarkdown(text) {
   if (!text) return '';
   return text
@@ -686,6 +776,7 @@ function formatMarkdown(text) {
 // CloudWatch Fleet Metrics
 // -----------------------------------------------------------------------------
 async function fetchCloudWatchFleetMetrics() {
+  if (!state.isAuthenticated) return;
   try {
     const res = await fetch('/api/cloudwatch/ec2-metrics');
     if (!res.ok) return;
@@ -745,6 +836,7 @@ async function fetchCloudWatchFleetMetrics() {
 // Incident Audit Timeline
 // -----------------------------------------------------------------------------
 async function fetchIncidents() {
+  if (!state.isAuthenticated) return;
   try {
     const res = await fetch('/api/incidents');
     const data = await res.json();
@@ -784,16 +876,5 @@ async function fetchIncidents() {
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
   initLucide();
-  
-  fetchMetrics();
-  fetchAnomalies();
-  fetchTopology();
-  fetchLogs();
-  fetchCloudWatchFleetMetrics();
-  fetchIncidents();
-
-  setInterval(fetchMetrics, 3000);
-  setInterval(fetchAnomalies, 4000);
-  setInterval(fetchLogs, 5000);
-  setInterval(fetchCloudWatchFleetMetrics, 30000);
+  checkSession();
 });

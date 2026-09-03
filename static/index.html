@@ -57,6 +57,141 @@
       min-height: 100vh;
     }
 
+    /* AUTHENTICATION VIEW */
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 50% 30%, rgba(56, 189, 248, 0.12), transparent 60%),
+                  radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.08), transparent 50%),
+                  #070b14;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      padding: 20px;
+    }
+    .auth-card {
+      width: 440px;
+      max-width: 100%;
+      background: rgba(14, 21, 38, 0.9);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(56, 189, 248, 0.15);
+      border-radius: var(--radius-lg);
+      padding: 36px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .auth-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 12px;
+    }
+    .auth-logo {
+      width: 54px;
+      height: 54px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-glow-cyan);
+      color: #fff;
+    }
+    .auth-title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+    .auth-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .auth-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .auth-label {
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.04em;
+    }
+    .auth-input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .auth-input-icon {
+      position: absolute;
+      left: 14px;
+      width: 17px;
+      height: 17px;
+      color: var(--text-muted);
+    }
+    .auth-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-glass);
+      border-radius: var(--radius-md);
+      padding: 11px 14px 11px 40px;
+      color: #fff;
+      font-size: 0.88rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .auth-input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+    }
+    .auth-error-msg {
+      font-size: 0.78rem;
+      color: var(--accent-rose);
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+    .auth-submit-btn {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      color: #000;
+      font-weight: 600;
+      font-size: 0.9rem;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3);
+      margin-top: 4px;
+    }
+    .auth-submit-btn:hover {
+      background: linear-gradient(135deg, #7dd3fc, #60a5fa);
+      transform: translateY(-1px);
+    }
+    .auth-footer-note {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-align: center;
+      font-family: var(--font-mono);
+    }
+
     .app-layout { display: flex; height: 100vh; width: 100vw; overflow: hidden; position: relative; }
     .glass-card {
       background: var(--bg-card);
@@ -224,6 +359,19 @@
       font-size: 0.8rem;
     }
     .user-role { font-size: 0.8rem; color: var(--text-secondary); }
+
+    .logout-btn-mini {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      border-radius: var(--radius-sm);
+      transition: color 0.15s ease;
+    }
+    .logout-btn-mini:hover { color: var(--accent-rose); }
 
     /* FLOATING AI SRE ASSISTANT BOT WIDGET (BOTTOM-RIGHT) */
     .floating-ai-widget {
@@ -561,7 +709,50 @@
 </head>
 <body class="dark-theme">
 
-  <div class="app-layout">
+  <!-- AUTHENTICATION OVERLAY VIEW -->
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="auth-logo">
+          <i data-lucide="shield-check" style="width: 28px; height: 28px;"></i>
+        </div>
+        <h1 class="auth-title">AWS Infra AI Control Plane</h1>
+        <p class="auth-subtitle">Sign in to access cloud telemetry, metrics & AI SRE diagnostics</p>
+      </div>
+
+      <form id="loginForm" class="auth-form" onsubmit="handleLoginSubmit(event)">
+        <div class="auth-input-group">
+          <label class="auth-label" for="loginUsername">USERNAME</label>
+          <div class="auth-input-wrapper">
+            <i data-lucide="user" class="auth-input-icon"></i>
+            <input type="text" id="loginUsername" class="auth-input" placeholder="Enter admin username" required autofocus autocomplete="username">
+          </div>
+        </div>
+
+        <div class="auth-input-group">
+          <label class="auth-label" for="loginPassword">PASSWORD</label>
+          <div class="auth-input-wrapper">
+            <i data-lucide="lock" class="auth-input-icon"></i>
+            <input type="password" id="loginPassword" class="auth-input" placeholder="Enter master password" required autocomplete="current-password">
+          </div>
+        </div>
+
+        <div id="loginErrorMsg" class="auth-error-msg">
+          <i data-lucide="alert-circle" style="width: 15px; height: 15px; flex-shrink: 0;"></i>
+          <span id="loginErrorText">Invalid username or password.</span>
+        </div>
+
+        <button type="submit" id="loginSubmitBtn" class="auth-submit-btn">
+          <span>Authenticate Session</span>
+          <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i>
+        </button>
+      </form>
+
+      <div class="auth-footer-note">CloudOps Production Infrastructure • IAM Gated</div>
+    </div>
+  </div>
+
+  <div class="app-layout" id="appLayout" style="display: none;">
     
     <!-- SIDEBAR NAVIGATION -->
     <aside class="sidebar">
@@ -632,7 +823,7 @@
     <!-- MAIN CONTENT AREA -->
     <main class="main-wrapper">
       
-      <!-- TOP HEADER BAR (Cleaned: Search Bar Removed) -->
+      <!-- TOP HEADER BAR -->
       <header class="top-navbar">
         <div class="top-navbar-title">
           <h2>Cloud Infrastructure Overview</h2>
@@ -646,8 +837,11 @@
           </button>
 
           <div class="user-profile-badge">
-            <div class="avatar">AB</div>
-            <span class="user-role">DevOps Admin</span>
+            <div class="avatar" id="userAvatar">AB</div>
+            <span class="user-role" id="userRoleText">DevOps Admin</span>
+            <button class="logout-btn-mini" id="logoutBtn" title="Sign Out Session">
+              <i data-lucide="log-out" style="width: 16px; height: 16px;"></i>
+            </button>
           </div>
         </div>
       </header>
@@ -913,7 +1107,6 @@
     </main>
 
     <!-- FLOATING AI SRE ASSISTANT BOT WIDGET (BOTTOM-RIGHT) -->
-    <!-- Retains id="toggleAiPanelBtn" to connect with existing app.js logic -->
     <div class="floating-ai-widget" id="toggleAiPanelBtn" title="Open AI SRE Assistant">
       <div class="floating-ai-avatar">
         <i data-lucide="bot"></i>
