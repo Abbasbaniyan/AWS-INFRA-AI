@@ -172,57 +172,27 @@
       top: 0;
       z-index: 15;
     }
-    .search-container { position: relative; width: 440px; max-width: 100%; display: flex; align-items: center; }
-    .search-icon { position: absolute; left: 12px; width: 17px; height: 17px; color: var(--text-muted); }
-    #globalSearchInput {
-      width: 100%;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--border-glass);
-      padding: 9px 70px 9px 38px;
-      border-radius: var(--radius-md);
-      color: var(--text-primary);
-      font-size: 0.86rem;
-      outline: none;
-    }
-    #globalSearchInput:focus {
-      border-color: var(--border-focus);
-      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
-    }
-    .shortcut-key {
-      position: absolute;
-      right: 10px;
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--text-secondary);
-      font-size: 0.7rem;
-      padding: 2px 6px;
-      border-radius: var(--radius-sm);
-      font-family: var(--font-mono);
-    }
-    .search-results-dropdown {
-      position: absolute;
-      top: 48px;
-      left: 0;
-      right: 0;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-glass);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-subtle);
-      max-height: 320px;
-      overflow-y: auto;
-      display: none;
-      flex-direction: column;
-      z-index: 50;
-    }
-    .search-res-item {
-      padding: 10px 14px;
+
+    .top-navbar-title {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-      cursor: pointer;
-      font-size: 0.84rem;
+      gap: 8px;
     }
-    .search-res-item:hover { background: rgba(56, 189, 248, 0.1); }
+    .top-navbar-title h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+    .header-region-tag {
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--accent-cyan);
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
 
     .header-actions { display: flex; align-items: center; gap: 14px; }
     .action-btn {
@@ -241,12 +211,6 @@
       white-space: nowrap;
     }
     .action-btn:hover { background: rgba(255, 255, 255, 0.1); }
-    .action-btn.ai-toggle-btn {
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2));
-      border-color: rgba(56, 189, 248, 0.4);
-      color: #fff;
-    }
-    .action-btn.ai-toggle-btn:hover { box-shadow: var(--shadow-glow-cyan); }
     .user-profile-badge { display: flex; align-items: center; gap: 10px; padding-left: 10px; border-left: 1px solid var(--border-glass); }
     .avatar {
       width: 34px;
@@ -260,6 +224,77 @@
       font-size: 0.8rem;
     }
     .user-role { font-size: 0.8rem; color: var(--text-secondary); }
+
+    /* FLOATING AI SRE ASSISTANT BOT WIDGET (BOTTOM-RIGHT) */
+    .floating-ai-widget {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      z-index: 35;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      background: rgba(14, 21, 38, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      padding: 8px 18px 8px 8px;
+      border-radius: var(--radius-full);
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.8), 0 0 25px rgba(56, 189, 248, 0.25);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .floating-ai-widget:hover {
+      transform: translateY(-3px) scale(1.02);
+      border-color: rgba(56, 189, 248, 0.65);
+      box-shadow: 0 14px 35px -5px rgba(0, 0, 0, 0.9), 0 0 32px rgba(56, 189, 248, 0.45);
+    }
+    .floating-ai-avatar {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(135deg, #0284c7, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+    }
+    .floating-ai-avatar svg {
+      width: 22px;
+      height: 22px;
+    }
+    .floating-ai-badge {
+      position: absolute;
+      top: -1px;
+      right: -1px;
+      width: 11px;
+      height: 11px;
+      background: var(--accent-emerald);
+      border: 2px solid #0e1526;
+      border-radius: var(--radius-full);
+      box-shadow: 0 0 8px var(--accent-emerald);
+    }
+    .floating-ai-text {
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+    }
+    .floating-ai-title {
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      letter-spacing: -0.01em;
+    }
+    .floating-ai-subtitle {
+      font-size: 0.68rem;
+      color: var(--accent-cyan);
+      font-weight: 500;
+    }
 
     /* Dashboard Layout */
     .content-view { display: none; padding: 24px 28px; flex-direction: column; gap: 24px; }
@@ -491,14 +526,9 @@
         flex-wrap: wrap;
         gap: 10px;
       }
-      .search-container {
-        width: 100%;
-        order: 2;
-      }
       .header-actions {
         width: 100%;
-        justify-content: space-between;
-        order: 1;
+        justify-content: flex-end;
       }
       .quick-insights-container {
         grid-template-columns: 1fr;
@@ -516,6 +546,15 @@
       }
       .user-role {
         display: none;
+      }
+      .floating-ai-widget {
+        bottom: 18px;
+        right: 18px;
+        padding: 6px 14px 6px 6px;
+      }
+      .floating-ai-avatar {
+        width: 38px;
+        height: 38px;
       }
     }
   </style>
@@ -593,24 +632,17 @@
     <!-- MAIN CONTENT AREA -->
     <main class="main-wrapper">
       
-      <!-- TOP HEADER BAR -->
+      <!-- TOP HEADER BAR (Cleaned: Search Bar Removed) -->
       <header class="top-navbar">
-        <div class="search-container">
-          <i data-lucide="search" class="search-icon"></i>
-          <input type="text" id="globalSearchInput" placeholder="Search EC2, VPC, S3, IPs, or logs (Press Ctrl + K)...">
-          <span class="shortcut-key">Ctrl K</span>
-          <div class="search-results-dropdown" id="searchResultsDropdown"></div>
+        <div class="top-navbar-title">
+          <h2>Cloud Infrastructure Overview</h2>
+          <span class="header-region-tag">eu-north-1</span>
         </div>
 
         <div class="header-actions">
           <button class="action-btn" id="refreshAllBtn" title="Force Refresh Metrics">
             <i data-lucide="refresh-cw" id="refreshIcon"></i>
             <span>Refresh</span>
-          </button>
-          
-          <button class="action-btn ai-toggle-btn" id="toggleAiPanelBtn">
-            <i data-lucide="sparkles"></i>
-            <span>AI SRE Assistant</span>
           </button>
 
           <div class="user-profile-badge">
@@ -879,6 +911,19 @@
       </section>
 
     </main>
+
+    <!-- FLOATING AI SRE ASSISTANT BOT WIDGET (BOTTOM-RIGHT) -->
+    <!-- Retains id="toggleAiPanelBtn" to connect with existing app.js logic -->
+    <div class="floating-ai-widget" id="toggleAiPanelBtn" title="Open AI SRE Assistant">
+      <div class="floating-ai-avatar">
+        <i data-lucide="bot"></i>
+        <div class="floating-ai-badge"></div>
+      </div>
+      <div class="floating-ai-text">
+        <span class="floating-ai-title">AI Assistant <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--accent-cyan);"></i></span>
+        <span class="floating-ai-subtitle">SRE Live Diagnostics</span>
+      </div>
+    </div>
 
     <!-- RIGHT SLIDE-OUT AI ASSISTANT PANEL -->
     <aside class="ai-assistant-panel" id="aiAssistantPanel">
