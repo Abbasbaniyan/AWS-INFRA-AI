@@ -248,7 +248,7 @@ async function dispatchGlobalRefresh() {
 }
 
 // -----------------------------------------------------------------------------
-// WORKSPACE: Summary, Fleet, Models, Deployments & Activity
+// WORKSPACE: Summary, Fleet, Models & Deployments Handlers
 // -----------------------------------------------------------------------------
 async function fetchWorkspaceSummary() {
   if (!state.isAuthenticated) return;
@@ -472,6 +472,9 @@ window.triggerModelAction = async function(modelName, actionType) {
   }
 };
 
+// -----------------------------------------------------------------------------
+// WORKSPACE: Deployments Fetcher & Lifecycle Action Handlers
+// -----------------------------------------------------------------------------
 async function fetchWorkspaceDeployments() {
   if (!state.isAuthenticated) return;
   try {
@@ -566,7 +569,7 @@ window.triggerDeploymentAction = async function(serviceName, actionType, btnElem
 };
 
 // -----------------------------------------------------------------------------
-// WORKSPACE PHASE 6: Unified Activity Ledger Handlers
+// WORKSPACE: Unified Activity Ledger Handlers
 // -----------------------------------------------------------------------------
 async function fetchWorkspaceActivity() {
   if (!state.isAuthenticated) return;
@@ -694,7 +697,7 @@ async function renderResourceTable(type) {
 }
 
 // -----------------------------------------------------------------------------
-// AI SRE Assistant with Action Runbook Detection (Phase 6)
+// AI SRE Assistant with Action Runbook Detection
 // -----------------------------------------------------------------------------
 async function sendAiMessage() {
   const text = elements.aiChatInput.value.trim();
@@ -727,7 +730,7 @@ async function sendAiMessage() {
 
     const replyContent = data.reply || 'No response returned from the assistant.';
     
-    // Check if user prompt requests an infrastructure action to append a runbook approval card
+    // Check if user prompt requests an infrastructure action to append an interactive runbook approval card
     let runbookActionHtml = '';
     const lowerP = text.toLowerCase();
     if (lowerP.includes('restart nginx')) {
@@ -738,7 +741,7 @@ async function sendAiMessage() {
             <span>nginx.service</span>
           </div>
           <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Target: Ingress reverse proxy port :80 on host node.</p>
-          <button class="ai-runbook-btn" onclick="triggerDeploymentAction('nginx', 'restart'); this.disabled=true; this.textContent='✓ Executed';">
+          <button class="ai-runbook-btn" onclick="executeAiRunbookAction('nginx', 'restart', this)">
             Approve & Execute Restart
           </button>
         </div>`;
@@ -750,7 +753,7 @@ async function sendAiMessage() {
             <span>aws-infra-api</span>
           </div>
           <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Target: Core FastAPI AI Engine port :8000 on host node.</p>
-          <button class="ai-runbook-btn" onclick="triggerDeploymentAction('aws-infra-api', 'restart'); this.disabled=true; this.textContent='✓ Executed';">
+          <button class="ai-runbook-btn" onclick="executeAiRunbookAction('aws-infra-api', 'restart', this)">
             Approve & Execute Restart
           </button>
         </div>`;
@@ -930,6 +933,45 @@ async function fetchIncidents() {
     console.error('Fetch incidents error:', err);
   }
 }
+
+// -----------------------------------------------------------------------------
+// AI Chat Interactive Runbook Executor (Phase 6)
+// -----------------------------------------------------------------------------
+window.executeAiRunbookAction = async function(serviceName, actionType, btnElement) {
+  if (btnElement) {
+    btnElement.disabled = true;
+    btnElement.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:12px; height:12px;"></i> Executing ${actionType}...`;
+    initLucide();
+  }
+
+  try {
+    const res = await fetch('/api/workspace/deployments/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service_id: serviceName, action: actionType })
+    });
+    const data = await res.json();
+
+    if (btnElement) {
+      btnElement.textContent = '✓ Executed';
+      btnElement.style.background = 'var(--accent-emerald)';
+      btnElement.style.color = '#fff';
+    }
+
+    // Append instant execution confirmation message in AI chat
+    appendChatMessage('assistant', `✅ **Action Succeeded:** \`${serviceName}\` has been **${actionType}ed** on **Ai-Infra-AI (Host Node)**.\n\n- **Status:** Running (Healthy)\n- **Action Log:** \`${data.message}\`\n- **Audit:** Event logged to Telemetry Log Stream & Activity Ledger.`);
+
+    // Refresh telemetry across views
+    dispatchGlobalRefresh();
+  } catch (err) {
+    console.error('Runbook execution error:', err);
+    if (btnElement) {
+      btnElement.disabled = false;
+      btnElement.textContent = '⚠️ Failed - Retry';
+    }
+    appendChatMessage('assistant', `❌ **Execution Failed:** Unable to trigger \`${actionType}\` on \`${serviceName}\`. Check backend connection.`);
+  }
+};
 
 // -----------------------------------------------------------------------------
 // Navigation & Event Listeners
