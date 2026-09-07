@@ -248,7 +248,7 @@ async function dispatchGlobalRefresh() {
 }
 
 // -----------------------------------------------------------------------------
-// WORKSPACE: Summary, Fleet, Models & Deployments Handlers
+// WORKSPACE: Summary, Fleet, Models, Deployments & Activity Handlers
 // -----------------------------------------------------------------------------
 async function fetchWorkspaceSummary() {
   if (!state.isAuthenticated) return;
@@ -472,9 +472,6 @@ window.triggerModelAction = async function(modelName, actionType) {
   }
 };
 
-// -----------------------------------------------------------------------------
-// WORKSPACE: Deployments Fetcher & Lifecycle Action Handlers
-// -----------------------------------------------------------------------------
 async function fetchWorkspaceDeployments() {
   if (!state.isAuthenticated) return;
   try {
@@ -568,9 +565,6 @@ window.triggerDeploymentAction = async function(serviceName, actionType, btnElem
   }
 };
 
-// -----------------------------------------------------------------------------
-// WORKSPACE: Unified Activity Ledger Handlers
-// -----------------------------------------------------------------------------
 async function fetchWorkspaceActivity() {
   if (!state.isAuthenticated) return;
   try {
@@ -697,7 +691,7 @@ async function renderResourceTable(type) {
 }
 
 // -----------------------------------------------------------------------------
-// AI SRE Assistant with Action Runbook Detection
+// AI SRE Assistant with Full SRE Runbook Engine (Phase 6)
 // -----------------------------------------------------------------------------
 async function sendAiMessage() {
   const text = elements.aiChatInput.value.trim();
@@ -730,31 +724,73 @@ async function sendAiMessage() {
 
     const replyContent = data.reply || 'No response returned from the assistant.';
     
-    // Check if user prompt requests an infrastructure action to append an interactive runbook approval card
+    // Dynamic Autonomous SRE Runbook Action Matcher
     let runbookActionHtml = '';
     const lowerP = text.toLowerCase();
-    if (lowerP.includes('restart nginx')) {
+
+    // 1. Service Lifecycle Actions
+    const servicesMap = {
+      'docker': { id: 'docker', name: 'Docker Engine', desc: 'Container daemon runtime on host node.' },
+      'nginx': { id: 'nginx', name: 'Nginx Proxy', desc: 'Ingress reverse proxy port :80 on host node.' },
+      'api': { id: 'aws-infra-api', name: 'FastAPI Backend', desc: 'Core FastAPI AI Engine port :8000.' },
+      'fastapi': { id: 'aws-infra-api', name: 'FastAPI Backend', desc: 'Core FastAPI AI Engine port :8000.' },
+      'ollama': { id: 'ollama.service', name: 'Ollama Daemon', desc: 'Ollama local LLM inference daemon port :11434.' },
+      'redis': { id: 'redis', name: 'Redis Cache', desc: 'In-memory telemetry caching store.' },
+      'postgres': { id: 'postgresql', name: 'PostgreSQL DB', desc: 'Primary relational database service.' },
+      'ssm': { id: 'aws-ssm-agent', name: 'AWS SSM Agent', desc: 'AWS Systems Manager host communication daemon.' },
+      'cloudwatch': { id: 'cloudwatch-agent', name: 'CloudWatch Agent', desc: 'Amazon CloudWatch metrics collection agent.' }
+    };
+
+    if (lowerP.includes('restart') || lowerP.includes('reload') || lowerP.includes('start') || lowerP.includes('stop')) {
+      const actionType = lowerP.includes('reload') ? 'reload' : (lowerP.includes('stop') ? 'stop' : 'restart');
+      for (const [key, svc] of Object.entries(servicesMap)) {
+        if (lowerP.includes(key)) {
+          runbookActionHtml = `
+            <div class="ai-action-runbook-card">
+              <div class="ai-runbook-header">
+                <span>⚡ SRE RUNBOOK ACTION RECOMMENDED</span>
+                <span>${svc.name}</span>
+              </div>
+              <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Target: ${svc.desc}</p>
+              <button class="ai-runbook-btn" onclick="executeAiRunbookAction('${svc.id}', '${actionType}', this)">
+                Approve & Execute ${actionType.toUpperCase()}
+              </button>
+            </div>`;
+          break;
+        }
+      }
+    }
+
+    // 2. AI Model Memory Management Actions (Pin/Unload)
+    if (lowerP.includes('model') || lowerP.includes('qwen') || lowerP.includes('unload') || lowerP.includes('pin') || lowerP.includes('load')) {
+      const isUnload = lowerP.includes('unload') || lowerP.includes('free');
+      const targetModel = lowerP.includes('1.5b') ? 'qwen2.5-coder:1.5b' : 'qwen2.5-coder:0.5b';
+      const action = isUnload ? 'unload' : 'load';
+      
       runbookActionHtml = `
         <div class="ai-action-runbook-card">
           <div class="ai-runbook-header">
-            <span>⚡ SRE RUNBOOK ACTION RECOMMENDED</span>
-            <span>nginx.service</span>
+            <span>🧠 AI MODEL RUNBOOK ACTION RECOMMENDED</span>
+            <span>${targetModel}</span>
           </div>
-          <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Target: Ingress reverse proxy port :80 on host node.</p>
-          <button class="ai-runbook-btn" onclick="executeAiRunbookAction('nginx', 'restart', this)">
-            Approve & Execute Restart
+          <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Action: ${isUnload ? 'Offload model from RAM to idle state' : 'Lock/Pin model weights directly in RAM'}.</p>
+          <button class="ai-runbook-btn" onclick="executeAiModelRunbookAction('${targetModel}', '${action}', this)">
+            Approve & ${action.toUpperCase()} MODEL
           </button>
         </div>`;
-    } else if (lowerP.includes('restart api') || lowerP.includes('restart fastapi')) {
+    }
+
+    // 3. Automated Anomaly Remediation & Cache Purge Actions
+    if (lowerP.includes('remediate') || lowerP.includes('clear cache') || lowerP.includes('purge') || lowerP.includes('high cpu')) {
       runbookActionHtml = `
         <div class="ai-action-runbook-card">
           <div class="ai-runbook-header">
-            <span>⚡ SRE RUNBOOK ACTION RECOMMENDED</span>
-            <span>aws-infra-api</span>
+            <span>🛡️ SRE AUTO-REMEDIATION RUNBOOK</span>
+            <span>Cluster Optimization</span>
           </div>
-          <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Target: Core FastAPI AI Engine port :8000 on host node.</p>
-          <button class="ai-runbook-btn" onclick="executeAiRunbookAction('aws-infra-api', 'restart', this)">
-            Approve & Execute Restart
+          <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Execute system cache purge, cycle transient socket buffers, and normalize CPU load.</p>
+          <button class="ai-runbook-btn" onclick="executeAiRemediationRunbook(this)">
+            Approve & Execute Auto-Remediation
           </button>
         </div>`;
     }
@@ -935,7 +971,7 @@ async function fetchIncidents() {
 }
 
 // -----------------------------------------------------------------------------
-// AI Chat Interactive Runbook Executor (Phase 6)
+// Autonomous SRE Runbook Executors (Interactive AI Actions)
 // -----------------------------------------------------------------------------
 window.executeAiRunbookAction = async function(serviceName, actionType, btnElement) {
   if (btnElement) {
@@ -958,18 +994,75 @@ window.executeAiRunbookAction = async function(serviceName, actionType, btnEleme
       btnElement.style.color = '#fff';
     }
 
-    // Append instant execution confirmation message in AI chat
-    appendChatMessage('assistant', `✅ **Action Succeeded:** \`${serviceName}\` has been **${actionType}ed** on **Ai-Infra-AI (Host Node)**.\n\n- **Status:** Running (Healthy)\n- **Action Log:** \`${data.message}\`\n- **Audit:** Event logged to Telemetry Log Stream & Activity Ledger.`);
+    appendChatMessage('assistant', `✅ **Action Succeeded:** \`${serviceName}\` has been **${actionType}ed** on **Ai-Infra-AI (Host Node)**.\n\n- **Status:** Running (Healthy)\n- **Action Log:** \`${data.message}\`\n- **Audit:** Event recorded directly to Live Logs & Activity Ledger.`);
 
-    // Refresh telemetry across views
-    dispatchGlobalRefresh();
+    await dispatchGlobalRefresh();
   } catch (err) {
     console.error('Runbook execution error:', err);
     if (btnElement) {
       btnElement.disabled = false;
       btnElement.textContent = '⚠️ Failed - Retry';
     }
-    appendChatMessage('assistant', `❌ **Execution Failed:** Unable to trigger \`${actionType}\` on \`${serviceName}\`. Check backend connection.`);
+    appendChatMessage('assistant', `❌ **Execution Failed:** Unable to trigger \`${actionType}\` on \`${serviceName}\`.`);
+  }
+};
+
+window.executeAiModelRunbookAction = async function(modelName, actionType, btnElement) {
+  if (btnElement) {
+    btnElement.disabled = true;
+    btnElement.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:12px; height:12px;"></i> Updating model memory...`;
+    initLucide();
+  }
+
+  try {
+    const res = await fetch('/api/workspace/models/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: modelName, action: actionType })
+    });
+    const data = await res.json();
+
+    if (btnElement) {
+      btnElement.textContent = '✓ Executed';
+      btnElement.style.background = 'var(--accent-emerald)';
+      btnElement.style.color = '#fff';
+    }
+
+    appendChatMessage('assistant', `✅ **Model Memory Updated:** \`${modelName}\` state set to **${actionType.toUpperCase()}**.\n\n- **Detail:** \`${data.message}\`\n- **RAM:** Telemetry updated across Model Hub.`);
+    await dispatchGlobalRefresh();
+  } catch (err) {
+    console.error('Model runbook error:', err);
+    if (btnElement) {
+      btnElement.disabled = false;
+      btnElement.textContent = '⚠️ Failed - Retry';
+    }
+  }
+};
+
+window.executeAiRemediationRunbook = async function(btnElement) {
+  if (btnElement) {
+    btnElement.disabled = true;
+    btnElement.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:12px; height:12px;"></i> Purging cache & stabilizing...`;
+    initLucide();
+  }
+
+  try {
+    await fetch('/api/remediate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anomaly_id: 'ai-prompt-remediate', action_type: 'purge_cache', target: 'host-kernel' })
+    });
+
+    if (btnElement) {
+      btnElement.textContent = '✓ Remediation Applied';
+      btnElement.style.background = 'var(--accent-emerald)';
+      btnElement.style.color = '#fff';
+    }
+
+    appendChatMessage('assistant', `🛡️ **Auto-Remediation Completed:** Host memory caches purged and transient I/O flushed. Health score normalized.`);
+    await dispatchGlobalRefresh();
+  } catch (err) {
+    console.error('Remediation error:', err);
   }
 };
 
@@ -993,7 +1086,6 @@ function initEventListeners() {
     });
   }
 
-  // Sidebar primary navigation
   elements.navButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const view = btn.getAttribute('data-view');
@@ -1031,7 +1123,6 @@ function initEventListeners() {
     });
   });
 
-  // Workspace sub-tabs navigation
   if (elements.workspaceTabButtons) {
     elements.workspaceTabButtons.forEach(tabBtn => {
       tabBtn.addEventListener('click', () => {
@@ -1041,7 +1132,6 @@ function initEventListeners() {
     });
   }
 
-  // Model Hub pull action
   if (elements.modelPullBtn && elements.modelPullInput) {
     elements.modelPullBtn.addEventListener('click', () => {
       const targetModel = elements.modelPullInput.value.trim();
@@ -1051,7 +1141,6 @@ function initEventListeners() {
     });
   }
 
-  // Activity Ledger Category Filter & Refresh
   if (elements.wsActivityCategoryFilter) {
     elements.wsActivityCategoryFilter.addEventListener('change', renderWorkspaceActivityUI);
   }
@@ -1132,6 +1221,7 @@ function switchView(viewName) {
 
   if (viewName === 'dashboard' || viewName === 'topology') {
     elements.views.dashboard.classList.add('active');
+    fetchLogs();
   } else if (viewName === 'workspace') {
     elements.views.workspace.classList.add('active');
     fetchWorkspaceSummary();

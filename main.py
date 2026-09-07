@@ -26,7 +26,7 @@ load_dotenv()
 app = FastAPI(
     title="AWS Infrastructure AI Assistant API",
     description="Dynamic CloudOps AI engine with targeted AWS telemetry grounding.",
-    version="3.3.5"
+    version="3.4.0"
 )
 
 app.add_middleware(
@@ -52,7 +52,9 @@ service_states = {
     "postgresql": "running",
     "redis": "running",
     "aws-ssm-agent": "running",
-    "cloudwatch-agent": "running"
+    "cloudwatch-agent": "running",
+    "aws-infra-api": "running",
+    "ollama.service": "running"
 }
 simulated_anomalies = []
 incident_history = []
@@ -85,11 +87,11 @@ class RemediationRequest(BaseModel):
 
 class ModelActionRequest(BaseModel):
     model: str
-    action: str
+    action: str  # "load", "unload", "pull"
 
 class DeploymentActionRequest(BaseModel):
     service_id: str
-    action: str
+    action: str  # "restart", "reload", "start", "stop"
 
 # -----------------------------------------------------------------------------
 # Base AWS Session
@@ -109,7 +111,7 @@ def log_event(level: str, source: str, message: str):
         "message": message
     }
     system_logs.insert(0, entry)
-    if len(system_logs) > 200:
+    if len(system_logs) > 250:
         system_logs.pop()
     return entry
 
@@ -190,7 +192,7 @@ def auth_login(req: LoginRequest):
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
 # -----------------------------------------------------------------------------
-# WORKSPACE: Summary, Server Fleet, Models & Deployments
+# WORKSPACE: Summary, Fleet, Models, Deployments & Activity Endpoints
 # -----------------------------------------------------------------------------
 @app.get("/api/workspace/summary")
 async def get_workspace_summary():
@@ -432,7 +434,7 @@ def get_workspace_deployments():
             "port": 8000,
             "runtime": "Python 3.10 / Uvicorn",
             "commit": "git-9f82a1b",
-            "status": "running",
+            "status": service_states.get("aws-infra-api", "running"),
             "health": "healthy",
             "uptime": uptime_str,
             "target_host": "Ai-Infra-AI (Host Node)"
@@ -444,7 +446,7 @@ def get_workspace_deployments():
             "port": 11434,
             "runtime": f"Native C++ / {OLLAMA_MODEL}",
             "commit": "v0.5.8-pinned",
-            "status": "running",
+            "status": service_states.get("ollama.service", "running"),
             "health": "healthy",
             "uptime": uptime_str,
             "target_host": "Ai-Infra-AI (Host Node)"
@@ -498,25 +500,31 @@ def execute_deployment_action(req: DeploymentActionRequest):
     svc = req.service_id.lower()
     act = req.action.lower()
     
-    if svc in service_states:
-        service_states[svc] = "running" if act in ["restart", "reload", "start"] else "stopped"
+    # Normalize service keys
+    canonical_key = svc
+    if "nginx" in svc: canonical_key = "nginx"
+    elif "docker" in svc: canonical_key = "docker"
+    elif "api" in svc or "fastapi" in svc: canonical_key = "aws-infra-api"
+    elif "ollama" in svc: canonical_key = "ollama.service"
+    elif "cloudwatch" in svc: canonical_key = "cloudwatch-agent"
+    elif "ssm" in svc: canonical_key = "aws-ssm-agent"
+    elif "postgres" in svc: canonical_key = "postgresql"
+    elif "redis" in svc: canonical_key = "redis"
+
+    service_states[canonical_key] = "running" if act in ["restart", "reload", "start"] else "stopped"
     
-    log_event("INFO", "DeploymentManager", f"Service action [{act}] executed on [{svc}].")
+    log_event("INFO", "DeploymentManager", f"Service action [{act}] executed on [{canonical_key}].")
     return {
         "status": "success",
-        "service_id": req.service_id,
+        "service_id": canonical_key,
         "action": req.action,
-        "message": f"Deployment action '{act}' executed successfully on '{svc}'."
+        "message": f"Deployment action '{act}' executed successfully on '{canonical_key}'."
     }
 
-# -----------------------------------------------------------------------------
-# WORKSPACE PHASE 6: Unified Activity Ledger Endpoint
-# -----------------------------------------------------------------------------
 @app.get("/api/workspace/activity")
 def get_workspace_activity(limit: int = 50):
     events = []
     
-    # 1. System & Deployment events
     for l in system_logs[:limit]:
         events.append({
             "id": l["id"],
@@ -527,7 +535,6 @@ def get_workspace_activity(limit: int = 50):
             "message": l["message"]
         })
     
-    # 2. Incident & Remediation events
     for inc in incident_history[:limit]:
         events.append({
             "id": inc["id"],
@@ -887,7 +894,7 @@ async def get_ai_server_health():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.3.5"}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.4.0"}
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
