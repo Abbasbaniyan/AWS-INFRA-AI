@@ -39,7 +39,7 @@ const elements = {
     deployments: document.getElementById('workspace-panel-deployments'),
     activity: document.getElementById('workspace-panel-activity')
   },
-  // Workspace Overview KPI elements
+  // Workspace elements
   wsConnectedServers: document.getElementById('wsConnectedServers'),
   wsServerSub: document.getElementById('wsServerSub'),
   wsModelEngine: document.getElementById('wsModelEngine'),
@@ -50,6 +50,8 @@ const elements = {
   wsHealthSub: document.getElementById('wsHealthSub'),
   workspaceServersContainer: document.getElementById('workspaceServersContainer'),
   workspaceModelsTableBody: document.getElementById('workspaceModelsTableBody'),
+  workspaceDeploymentsTableBody: document.getElementById('workspaceDeploymentsTableBody'),
+  wsDeploymentsCountBadge: document.getElementById('wsDeploymentsCountBadge'),
   modelPullInput: document.getElementById('modelPullInput'),
   modelPullBtn: document.getElementById('modelPullBtn'),
 
@@ -90,6 +92,7 @@ const elements = {
   sendAiChatBtn: document.getElementById('sendAiChatBtn'),
   promptChips: document.querySelectorAll('.prompt-chip'),
   refreshAllBtn: document.getElementById('refreshAllBtn'),
+  refreshIcon: document.getElementById('refreshIcon'),
   nodeModal: document.getElementById('nodeModal'),
   modalNodeTitle: document.getElementById('modalNodeTitle'),
   modalNodeContent: document.getElementById('modalNodeContent'),
@@ -189,15 +192,7 @@ function lockApplication() {
 function startDataPolling() {
   stopDataPolling();
   
-  fetchMetrics();
-  fetchAnomalies();
-  fetchTopology();
-  fetchLogs();
-  fetchCloudWatchFleetMetrics();
-  fetchIncidents();
-  fetchWorkspaceSummary();
-  fetchWorkspaceServers();
-  fetchWorkspaceModels();
+  dispatchGlobalRefresh();
 
   state.pollTimers.push(setInterval(fetchMetrics, 3000));
   state.pollTimers.push(setInterval(fetchAnomalies, 4000));
@@ -205,6 +200,7 @@ function startDataPolling() {
   state.pollTimers.push(setInterval(fetchWorkspaceSummary, 6000));
   state.pollTimers.push(setInterval(fetchWorkspaceServers, 10000));
   state.pollTimers.push(setInterval(fetchWorkspaceModels, 12000));
+  state.pollTimers.push(setInterval(fetchWorkspaceDeployments, 15000));
   state.pollTimers.push(setInterval(fetchCloudWatchFleetMetrics, 30000));
 }
 
@@ -214,7 +210,39 @@ function stopDataPolling() {
 }
 
 // -----------------------------------------------------------------------------
-// WORKSPACE: Summary, Fleet & Model Management Handlers
+// Global Manual Refresh Handler (Fixed)
+// -----------------------------------------------------------------------------
+async function dispatchGlobalRefresh() {
+  if (!state.isAuthenticated) return;
+
+  if (elements.refreshIcon) {
+    elements.refreshIcon.classList.add('spin');
+  }
+
+  try {
+    await Promise.allSettled([
+      fetchMetrics(),
+      fetchAnomalies(),
+      fetchTopology(),
+      fetchLogs(),
+      fetchCloudWatchFleetMetrics(),
+      fetchIncidents(),
+      fetchWorkspaceSummary(),
+      fetchWorkspaceServers(),
+      fetchWorkspaceModels(),
+      fetchWorkspaceDeployments()
+    ]);
+  } finally {
+    setTimeout(() => {
+      if (elements.refreshIcon) {
+        elements.refreshIcon.classList.remove('spin');
+      }
+    }, 600);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// WORKSPACE: Summary, Fleet, Models & Deployments Handlers
 // -----------------------------------------------------------------------------
 async function fetchWorkspaceSummary() {
   if (!state.isAuthenticated) return;
@@ -438,9 +466,97 @@ window.triggerModelAction = async function(modelName, actionType) {
 };
 
 // -----------------------------------------------------------------------------
+// WORKSPACE PHASE 5: Deployments Fetcher & Lifecycle Action Handlers
+// -----------------------------------------------------------------------------
+async function fetchWorkspaceDeployments() {
+  if (!state.isAuthenticated) return;
+  try {
+    const res = await fetch('/api/workspace/deployments');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderWorkspaceDeploymentsUI(data.deployments || []);
+  } catch (err) {
+    console.error('Workspace deployments fetch error:', err);
+  }
+}
+
+function renderWorkspaceDeploymentsUI(deployments) {
+  if (!elements.workspaceDeploymentsTableBody) return;
+  elements.workspaceDeploymentsTableBody.innerHTML = '';
+
+  if (elements.wsDeploymentsCountBadge) {
+    elements.wsDeploymentsCountBadge.textContent = `${deployments.length} Services Live`;
+  }
+
+  if (deployments.length === 0) {
+    elements.workspaceDeploymentsTableBody.innerHTML = '<tr><td colspan="8" class="text-center">No active service deployments found.</td></tr>';
+    return;
+  }
+
+  deployments.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div style="display:flex; flex-direction:column;">
+          <strong>${d.name}</strong>
+          <code style="font-size:0.72rem; color:var(--text-muted);">${d.service}</code>
+        </div>
+      </td>
+      <td><code>:${d.port}</code></td>
+      <td><span style="font-size:0.78rem; color:var(--text-secondary);">${d.runtime}</span></td>
+      <td><span class="badge-status-pill">${d.commit}</span></td>
+      <td>
+        <span class="health-pill ${d.status === 'running' ? 'healthy' : 'critical'}">
+          ● ${d.status.toUpperCase()}
+        </span>
+      </td>
+      <td>${d.uptime}</td>
+      <td><span style="font-size:0.75rem; color:var(--text-muted);">${d.target_host}</span></td>
+      <td>
+        <div style="display:flex; gap:6px;">
+          <button class="action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-cyan); color:var(--accent-cyan);" onclick="triggerDeploymentAction('${d.service}', 'restart')">
+            <i data-lucide="rotate-cw" style="width:12px; height:12px;"></i> Restart
+          </button>
+          <button class="action-btn" style="padding:4px 8px; font-size:0.75rem;" onclick="sendPromptToAi('Inspect service logs and deployment state for: ${d.name} (${d.service})')">
+            <i data-lucide="sparkles" style="width:12px; height:12px;"></i>
+          </button>
+        </div>
+      </td>
+    `;
+    elements.workspaceDeploymentsTableBody.appendChild(tr);
+  });
+
+  initLucide();
+}
+
+window.triggerDeploymentAction = async function(serviceName, actionType) {
+  try {
+    await fetch('/api/workspace/deployments/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service_id: serviceName, action: actionType })
+    });
+    fetchWorkspaceDeployments();
+    fetchWorkspaceSummary();
+    fetchLogs();
+  } catch (err) {
+    console.error(`Deployment action ${actionType} failed:`, err);
+  }
+};
+
+// -----------------------------------------------------------------------------
 // Navigation & Event Listeners
 // -----------------------------------------------------------------------------
 function initEventListeners() {
+  // Master Refresh Button with Rotation Animation
+  const refreshBtn = document.getElementById('refreshAllBtn');
+  if (refreshBtn) {
+    refreshBtn.onclick = function(e) {
+      e.preventDefault();
+      dispatchGlobalRefresh();
+    };
+  }
+
   if (elements.logoutBtn) {
     elements.logoutBtn.addEventListener('click', () => {
       sessionStorage.removeItem('aws_infra_token');
@@ -516,20 +632,6 @@ function initEventListeners() {
     });
   }
 
-  if (elements.refreshAllBtn) {
-    elements.refreshAllBtn.addEventListener('click', () => {
-      fetchMetrics();
-      fetchAnomalies();
-      fetchTopology();
-      fetchLogs();
-      fetchCloudWatchFleetMetrics();
-      fetchIncidents();
-      fetchWorkspaceSummary();
-      fetchWorkspaceServers();
-      fetchWorkspaceModels();
-    });
-  }
-
   if (elements.toggleAiPanelBtn) {
     elements.toggleAiPanelBtn.addEventListener('click', () => {
       elements.aiAssistantPanel.classList.toggle('open');
@@ -601,6 +703,8 @@ function switchView(viewName) {
       fetchWorkspaceServers();
     } else if (state.activeWorkspaceTab === 'models') {
       fetchWorkspaceModels();
+    } else if (state.activeWorkspaceTab === 'deployments') {
+      fetchWorkspaceDeployments();
     }
     initLucide();
   } else {
@@ -626,6 +730,8 @@ function switchWorkspaceTab(tabName) {
     fetchWorkspaceServers();
   } else if (tabName === 'models') {
     fetchWorkspaceModels();
+  } else if (tabName === 'deployments') {
+    fetchWorkspaceDeployments();
   }
 
   initLucide();
@@ -735,13 +841,7 @@ window.triggerRemediation = async function(anomalyId, actionType, target) {
         target: target
       })
     });
-    fetchIncidents();
-    fetchAnomalies();
-    fetchLogs();
-    fetchMetrics();
-    fetchWorkspaceSummary();
-    fetchWorkspaceServers();
-    fetchWorkspaceModels();
+    dispatchGlobalRefresh();
   } catch (err) {
     console.error('Remediation error:', err);
   }

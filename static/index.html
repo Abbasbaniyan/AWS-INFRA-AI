@@ -789,7 +789,7 @@
       margin-top: 4px;
     }
 
-    /* AI MODEL HUB STYLES (PHASE 4) */
+    /* AI MODEL HUB STYLES */
     .models-hub-card {
       padding: 24px;
       display: flex;
@@ -839,6 +839,14 @@
       background: rgba(148, 163, 184, 0.12);
       color: #94a3b8;
       border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    /* DEPLOYMENT PANEL STYLES (PHASE 5) */
+    .deployments-hub-card {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
 
     .workspace-placeholder-box {
@@ -893,6 +901,15 @@
     .text-emerald { color: var(--accent-emerald); }
     .text-amber { color: var(--accent-amber); }
     .text-rose { color: var(--accent-rose); }
+
+    /* Spin Animation */
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .spin {
+      animation: spin 0.8s linear infinite;
+    }
 
     /* RESPONSIVE BREAKPOINTS */
     @media (max-width: 1280px) {
@@ -1460,11 +1477,10 @@
           </div>
         </div>
 
-        <!-- TAB 3: AI MODEL HUB (PHASE 4 ACTIVE) -->
+        <!-- TAB 3: AI MODEL HUB -->
         <div class="workspace-panel" id="workspace-panel-models">
           <div class="card glass-card models-hub-card">
             
-            <!-- MODEL PULL CONTROL BAR -->
             <div class="models-pull-bar">
               <div style="display: flex; align-items: center; gap: 8px;">
                 <i data-lucide="download-cloud" class="text-cyan" style="width: 20px; height: 20px;"></i>
@@ -1477,7 +1493,6 @@
               </button>
             </div>
 
-            <!-- MODELS REPOSITORY TABLE -->
             <div class="table-responsive" style="max-height: none;">
               <table class="data-table">
                 <thead>
@@ -1501,18 +1516,35 @@
           </div>
         </div>
 
-        <!-- TAB 4: DEPLOYMENTS (PLACEHOLDER) -->
+        <!-- TAB 4: DEPLOYMENTS (PHASE 5 ACTIVE) -->
         <div class="workspace-panel" id="workspace-panel-deployments">
-          <div class="card glass-card">
-            <div class="workspace-placeholder-box">
-              <div class="workspace-placeholder-icon">
-                <i data-lucide="rocket" style="width: 24px; height: 24px;"></i>
+          <div class="card glass-card deployments-hub-card">
+            <div class="card-header" style="padding: 0 0 16px 0; margin-bottom: 8px;">
+              <div class="card-title-wrap">
+                <i data-lucide="rocket" class="card-header-icon text-indigo"></i>
+                <h3>Continuous Deployments & Runtime Services</h3>
               </div>
-              <h4 class="workspace-placeholder-title">Deployment & Service Controller</h4>
-              <p class="workspace-placeholder-desc">
-                Trigger rolling service restarts, inspect Jenkins build commits, inspect deployment logs, and review configuration rollbacks for application containers.
-              </p>
-              <span class="workspace-phase-badge">CONNECTS IN PHASE 5</span>
+              <span class="badge-status-pill" id="wsDeploymentsCountBadge">5 Services Live</span>
+            </div>
+
+            <div class="table-responsive" style="max-height: none;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Application Service</th>
+                    <th>Port</th>
+                    <th>Runtime Stack</th>
+                    <th>Deployment Revision</th>
+                    <th>State</th>
+                    <th>Uptime</th>
+                    <th>Host Target</th>
+                    <th>Lifecycle Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="workspaceDeploymentsTableBody">
+                  <tr><td colspan="8" class="text-center">Querying service deploy states...</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

@@ -26,7 +26,7 @@ load_dotenv()
 app = FastAPI(
     title="AWS Infrastructure AI Assistant API",
     description="Dynamic CloudOps AI engine with targeted AWS telemetry grounding.",
-    version="3.3.3"
+    version="3.3.4"
 )
 
 app.add_middleware(
@@ -85,7 +85,11 @@ class RemediationRequest(BaseModel):
 
 class ModelActionRequest(BaseModel):
     model: str
-    action: str  # "load", "unload", "pull"
+    action: str
+
+class DeploymentActionRequest(BaseModel):
+    service_id: str
+    action: str  # "restart", "reload"
 
 # -----------------------------------------------------------------------------
 # Base AWS Session
@@ -186,7 +190,7 @@ def auth_login(req: LoginRequest):
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
 # -----------------------------------------------------------------------------
-# WORKSPACE: Summary, Server Fleet & AI Model Endpoints
+# WORKSPACE: Summary, Server Fleet, Models & Deployments Endpoints
 # -----------------------------------------------------------------------------
 @app.get("/api/workspace/summary")
 async def get_workspace_summary():
@@ -296,9 +300,6 @@ def get_workspace_servers():
         "servers": [primary_node, peer_node]
     }
 
-# -----------------------------------------------------------------------------
-# WORKSPACE PHASE 4: AI Model Management Endpoints
-# -----------------------------------------------------------------------------
 @app.get("/api/workspace/models")
 async def get_workspace_models():
     model_list = []
@@ -307,13 +308,11 @@ async def get_workspace_models():
     for base in [OLLAMA_BASE_URL, "http://127.0.0.1:11434"]:
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
-                # Check currently loaded models
                 ps_res = await client.get(f"{base}/api/ps")
                 if ps_res.status_code == 200:
                     for rm in ps_res.json().get("models", []):
                         running_models.add(rm.get("name"))
 
-                # Check installed model tags
                 tags_res = await client.get(f"{base}/api/tags")
                 if tags_res.status_code == 200:
                     for m in tags_res.json().get("models", []):
@@ -382,7 +381,6 @@ async def execute_model_action(req: ModelActionRequest):
     target_model = req.model.strip()
 
     if action == "load":
-        # Pin model into RAM by calling Ollama generate with keep_alive = -1
         for base in [OLLAMA_BASE_URL, "http://127.0.0.1:11434"]:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -401,7 +399,6 @@ async def execute_model_action(req: ModelActionRequest):
         return {"status": "success", "action": "load", "model": target_model, "message": f"Model {target_model} loaded."}
 
     elif action == "unload":
-        # Unload model by releasing memory with keep_alive = 0
         for base in [OLLAMA_BASE_URL, "http://127.0.0.1:11434"]:
             try:
                 async with httpx.AsyncClient(timeout=5.0) as client:
@@ -421,6 +418,99 @@ async def execute_model_action(req: ModelActionRequest):
         return {"status": "success", "action": "pull", "model": target_model, "message": f"Model pull request queued for '{target_model}'."}
 
     raise HTTPException(status_code=400, detail=f"Unsupported model action: {action}")
+
+# -----------------------------------------------------------------------------
+# WORKSPACE PHASE 5: Deployments & Continuous Delivery Endpoints
+# -----------------------------------------------------------------------------
+@app.get("/api/workspace/deployments")
+def get_workspace_deployments():
+    uptime_sec = int(time.time() - START_TIME)
+    uptime_str = f"{uptime_sec // 3600}h {(uptime_sec % 3600) // 60}m"
+
+    deployments = [
+        {
+            "id": "svc-api",
+            "name": "FastAPI AI Engine",
+            "service": "aws-infra-api",
+            "port": 8000,
+            "runtime": "Python 3.10 / Uvicorn",
+            "commit": "git-9f82a1b",
+            "status": "running",
+            "health": "healthy",
+            "uptime": uptime_str,
+            "target_host": "Ai-Infra-AI (Host Node)"
+        },
+        {
+            "id": "svc-ollama",
+            "name": "Ollama LLM Daemon",
+            "service": "ollama.service",
+            "port": 11434,
+            "runtime": f"Native C++ / {OLLAMA_MODEL}",
+            "commit": "v0.5.8-pinned",
+            "status": "running",
+            "health": "healthy",
+            "uptime": uptime_str,
+            "target_host": "Ai-Infra-AI (Host Node)"
+        },
+        {
+            "id": "svc-nginx",
+            "name": "Nginx Ingress Proxy",
+            "service": "nginx",
+            "port": 80,
+            "runtime": "Nginx 1.24",
+            "commit": "rev-prod-01",
+            "status": service_states.get("nginx", "running"),
+            "health": "healthy" if service_states.get("nginx") == "running" else "degraded",
+            "uptime": "2d 6h",
+            "target_host": "Ai-Infra-AI (Host Node)"
+        },
+        {
+            "id": "svc-docker",
+            "name": "Container Runtime",
+            "service": "docker",
+            "port": 2375,
+            "runtime": "Docker Engine 24.0",
+            "commit": "systemd-managed",
+            "status": service_states.get("docker", "running"),
+            "health": "healthy" if service_states.get("docker") == "running" else "degraded",
+            "uptime": "3d 12h",
+            "target_host": "Ai-Infra-AI (Host Node)"
+        },
+        {
+            "id": "svc-cw-agent",
+            "name": "CloudWatch Daemon",
+            "service": "cloudwatch-agent",
+            "port": 443,
+            "runtime": "amazon-cloudwatch-agent",
+            "commit": "aws-managed",
+            "status": service_states.get("cloudwatch-agent", "running"),
+            "health": "healthy" if service_states.get("cloudwatch-agent") == "running" else "degraded",
+            "uptime": "5d 1h",
+            "target_host": "Ai-Infra-AI (Host Node)"
+        }
+    ]
+
+    return {
+        "status": "success",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "deployments": deployments
+    }
+
+@app.post("/api/workspace/deployments/action")
+def execute_deployment_action(req: DeploymentActionRequest):
+    svc = req.service_id.lower()
+    act = req.action.lower()
+    
+    if svc in service_states:
+        service_states[svc] = "running" if act in ["restart", "reload", "start"] else "stopped"
+    
+    log_event("INFO", "DeploymentManager", f"Service action [{act}] executed on [{svc}].")
+    return {
+        "status": "success",
+        "service_id": req.service_id,
+        "action": req.action,
+        "message": f"Deployment action '{act}' executed successfully on '{svc}'."
+    }
 
 # -----------------------------------------------------------------------------
 # MODULE 1: Deterministic Intent & Resource Classifier
@@ -768,7 +858,7 @@ async def get_ai_server_health():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.3.3"}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.3.4"}
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
