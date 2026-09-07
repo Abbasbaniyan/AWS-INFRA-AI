@@ -2,10 +2,10 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME           = 'aws-infra-ai'
-        IMAGE_NAME         = 'aws-infra-ai'
-        CONTAINER_NAME     = 'aws-infra-ai-prod'
-        HOST_PORT          = '8000'
+        APP_NAME         = 'aws-infra-ai'
+        IMAGE_NAME       = 'aws-infra-ai'
+        CONTAINER_NAME   = 'aws-infra-ai-prod'
+        HOST_PORT        = '8000'
         AWS_DEFAULT_REGION = 'eu-north-1'
         OLLAMA_BASE_URL    = 'http://127.0.0.1:11434'
         OLLAMA_MODEL       = 'qwen2.5-coder:1.5b'
@@ -63,15 +63,18 @@ pipeline {
         stage('Health Probe') {
             steps {
                 sh '''
+                    echo "Waiting 5 seconds for socket and container initialization..."
+                    sleep 5
+
                     echo "Checking container health status..."
                     ATTEMPTS=0
-                    MAX_ATTEMPTS=20
+                    MAX_ATTEMPTS=30
                     HEALTH_URL="http://127.0.0.1:${HOST_PORT}/health"
 
                     until curl -s -f ${HEALTH_URL} > /dev/null; do
                         ATTEMPTS=$((ATTEMPTS+1))
                         if [ ${ATTEMPTS} -ge ${MAX_ATTEMPTS} ]; then
-                            echo "Health check failed."
+                            echo "Health check failed after ${MAX_ATTEMPTS} attempts."
                             exit 1
                         fi
                         echo "Waiting for app to start (${ATTEMPTS}/${MAX_ATTEMPTS})..."
