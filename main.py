@@ -758,7 +758,7 @@ def get_resources(resource_type: str):
     return {"status": "success", "total": len(items), "items": items}
 
 # -----------------------------------------------------------------------------
-# Live Context Collector for Infrastructure-Aware Mode
+# Live Context Collector for Infrastructure-Aware Mode (Including AWS VPCs/EC2)
 # -----------------------------------------------------------------------------
 def get_live_infrastructure_context() -> dict:
     try:
@@ -767,6 +767,23 @@ def get_live_infrastructure_context() -> dict:
         disk = psutil.disk_usage("/")
         uptime_sec = int(time.time() - START_TIME)
         
+        session = get_aws_session()
+        ec2_instances = []
+        vpcs = []
+        try:
+            ec2_client = session.client('ec2')
+            res_ec2 = ec2_client.describe_instances()
+            for r in res_ec2.get('Reservations', []):
+                for inst in r.get('Instances', []):
+                    name = next((t['Value'] for t in inst.get('Tags', []) if t['Key'] == 'Name'), 'Unnamed')
+                    ec2_instances.append({"id": inst.get('InstanceId'), "name": name, "state": inst.get('State', {}).get('Name'), "type": inst.get('InstanceType'), "vpc_id": inst.get('VpcId')})
+            res_vpc = ec2_client.describe_vpcs()
+            for vpc in res_vpc.get('Vpcs', []):
+                v_name = next((t['Value'] for t in vpc.get('Tags', []) if t['Key'] == 'Name'), 'Default VPC')
+                vpcs.append({"id": vpc.get('VpcId'), "name": v_name, "cidr": vpc.get('CidrBlock')})
+        except Exception:
+            pass
+
         return {
             "host_node": "Ai-Infra-AI (Host Node)",
             "region": AWS_REGION,
@@ -775,6 +792,8 @@ def get_live_infrastructure_context() -> dict:
             "disk_percent": round(disk.percent, 1),
             "uptime_seconds": uptime_sec,
             "active_ollama_model": OLLAMA_MODEL,
+            "aws_vpcs": vpcs,
+            "aws_ec2_instances": ec2_instances,
             "host_services": [
                 {"name": "FastAPI Control Plane", "port": 8000, "status": service_states.get("aws-infra-api", "running")},
                 {"name": "Ollama LLM Engine", "port": 11434, "status": service_states.get("ollama.service", "running")},
@@ -802,11 +821,11 @@ async def chat(request: ChatRequest):
         infra_context = get_live_infrastructure_context()
         system_prompt = (
             "You are CloudOps AI, an expert Principal Site Reliability Engineer (SRE).\n"
-            "The user is asking about the application's infrastructure, host services, servers, or metrics.\n"
+            "The user is asking about the application's infrastructure, AWS resources, VPCs, EC2 instances, host services, servers, or metrics.\n"
             "You MUST base your answer strictly and explicitly on this ACTUAL live application state data retrieved from the system APIs:\n"
             f"{json.dumps(infra_context, separators=(',', ':'))}\n"
             "RULES:\n"
-            "- Answer using the exact service names, ports, and states provided in the context above.\n"
+            "- Answer using the exact resource IDs, service names, ports, and states provided in the context above.\n"
             "- Do NOT tell the user to run shell commands like ps, top, htop, or check hosting panels manually. The data is already provided above.\n"
             "- Keep answers direct, accurate, and concise."
         )
