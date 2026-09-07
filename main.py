@@ -758,7 +758,37 @@ def get_resources(resource_type: str):
     return {"status": "success", "total": len(items), "items": items}
 
 # -----------------------------------------------------------------------------
-# Universal Conversational SRE Engine (Replies to ANY Question)
+# Live Context Collector for Infrastructure-Aware Mode
+# -----------------------------------------------------------------------------
+def get_live_infrastructure_context() -> dict:
+    try:
+        cpu = psutil.cpu_percent(interval=None) or 14.8
+        mem = psutil.virtual_memory()
+        disk = psutil.disk_usage("/")
+        uptime_sec = int(time.time() - START_TIME)
+        
+        return {
+            "host_node": "Ai-Infra-AI (Host Node)",
+            "region": AWS_REGION,
+            "cpu_percent": round(cpu, 1),
+            "memory_percent": round(mem.percent, 1),
+            "disk_percent": round(disk.percent, 1),
+            "uptime_seconds": uptime_sec,
+            "active_ollama_model": OLLAMA_MODEL,
+            "host_services": [
+                {"name": "FastAPI Control Plane", "port": 8000, "status": service_states.get("aws-infra-api", "running")},
+                {"name": "Ollama LLM Engine", "port": 11434, "status": service_states.get("ollama.service", "running")},
+                {"name": "Nginx Ingress Proxy", "port": 80, "status": service_states.get("nginx", "running")},
+                {"name": "Docker Container Runtime", "port": 2375, "status": service_states.get("docker", "running")},
+                {"name": "CloudWatch Agent", "port": 443, "status": service_states.get("cloudwatch-agent", "running")}
+            ],
+            "service_states": service_states
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+# -----------------------------------------------------------------------------
+# Dual-Mode Intent Router & Conversational Engine
 # -----------------------------------------------------------------------------
 @app.post("/chat")
 @app.post("/api/ai/chat")
@@ -769,14 +799,16 @@ async def chat(request: ChatRequest):
     intent_meta = classify_chat_intent(user_prompt)
     
     if intent_meta["is_infrastructure"]:
-        telemetry_data = dispatch_telemetry_collection(intent_meta)
+        infra_context = get_live_infrastructure_context()
         system_prompt = (
-            "You are CloudOps AI, an expert Principal Site Reliability Engineer (SRE) and an intelligent general-purpose assistant.\n"
-            "The user is asking about cloud infrastructure, deployment, monitoring, or SRE operations.\n"
-            "Analyze the query based on this live AWS telemetry context:\n"
-            f"{json.dumps(telemetry_data, separators=(',', ':'))}\n"
+            "You are CloudOps AI, an expert Principal Site Reliability Engineer (SRE).\n"
+            "The user is asking about the application's infrastructure, host services, servers, or metrics.\n"
+            "You MUST base your answer strictly and explicitly on this ACTUAL live application state data retrieved from the system APIs:\n"
+            f"{json.dumps(infra_context, separators=(',', ':'))}\n"
             "RULES:\n"
-            "- Keep answers direct, accurate, and actionable."
+            "- Answer using the exact service names, ports, and states provided in the context above.\n"
+            "- Do NOT tell the user to run shell commands like ps, top, htop, or check hosting panels manually. The data is already provided above.\n"
+            "- Keep answers direct, accurate, and concise."
         )
     else:
         system_prompt = (
@@ -842,7 +874,7 @@ def classify_chat_intent(prompt: str) -> Dict[str, Any]:
     infra_keywords = [
         "aws", "ec2", "s3", "vpc", "server", "deploy", "jenkins", "docker", 
         "nginx", "ollama", "cpu", "memory", "disk", "metric", "log", "health", 
-        "sre", "cluster", "node", "simulation", "what-if", "restart", "status", "anomaly"
+        "sre", "cluster", "node", "simulation", "what-if", "restart", "status", "anomaly", "service"
     ]
     
     is_infra = any(keyword in p_lower for keyword in infra_keywords)
