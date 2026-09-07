@@ -269,6 +269,16 @@
       padding: 2px 7px;
       border-radius: var(--radius-full);
     }
+    .badge-workspace-new {
+      margin-left: auto;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo));
+      color: #000;
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
+      letter-spacing: 0.04em;
+    }
     .sidebar-footer { padding: 16px; border-top: 1px solid var(--border-glass); }
     .cluster-status-card {
       display: flex;
@@ -599,6 +609,141 @@
     .icon-close-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; }
     .icon-close-btn:hover { color: #fff; }
 
+    /* ==========================================================
+       WORKSPACE SHELL & SUB-NAVIGATION STYLES (PHASE 1)
+       ========================================================== */
+    .workspace-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding-bottom: 4px;
+    }
+    .workspace-title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .workspace-badge-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2));
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-cyan);
+    }
+    .workspace-main-title {
+      font-size: 1.28rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+    .workspace-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .workspace-subtabs-nav {
+      display: flex;
+      gap: 8px;
+      background: rgba(14, 21, 38, 0.7);
+      padding: 6px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-glass);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .workspace-tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 0.84rem;
+      font-weight: 500;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .workspace-tab-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .workspace-tab-btn.active {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.15));
+      color: var(--accent-cyan);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.15);
+    }
+    .workspace-panel {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .workspace-panel.active {
+      display: flex;
+    }
+    .workspace-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .workspace-stat-card {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .workspace-placeholder-box {
+      padding: 48px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 12px;
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.01);
+    }
+    .workspace-placeholder-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-full);
+      background: rgba(56, 189, 248, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-cyan);
+      margin-bottom: 4px;
+    }
+    .workspace-placeholder-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .workspace-placeholder-desc {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      max-width: 460px;
+      line-height: 1.5;
+    }
+    .workspace-phase-badge {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      color: var(--accent-cyan);
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 3px 8px;
+      border-radius: var(--radius-full);
+      margin-top: 6px;
+    }
+
     /* Color Classes */
     .text-cyan { color: var(--accent-cyan); }
     .text-blue { color: var(--accent-blue); }
@@ -609,7 +754,7 @@
     .text-rose { color: var(--accent-rose); }
 
     /* ==========================================================
-       RESPONSIVE BREAKPOINTS (GLOBAL LAYOUT ADAPTATION)
+       RESPONSIVE BREAKPOINTS
        ========================================================== */
     @media (max-width: 1280px) {
       .quick-insights-container {
@@ -617,6 +762,9 @@
       }
       .dashboard-grid-top {
         grid-template-columns: 1fr;
+      }
+      .workspace-stat-grid {
+        grid-template-columns: repeat(2, 1fr);
       }
     }
 
@@ -678,7 +826,8 @@
         width: 100%;
         justify-content: flex-end;
       }
-      .quick-insights-container {
+      .quick-insights-container,
+      .workspace-stat-grid {
         grid-template-columns: 1fr;
       }
       .health-gauge-container {
@@ -784,6 +933,14 @@
         <button class="nav-item" data-view="logs">
           <i data-lucide="terminal"></i>
           <span>Live Logs</span>
+        </button>
+
+        <!-- WORKSPACE SECTION -->
+        <div class="nav-section-title">WORKSPACE</div>
+        <button class="nav-item" data-view="workspace">
+          <i data-lucide="box"></i>
+          <span>Workspace Control</span>
+          <span class="badge-workspace-new">NEW</span>
         </button>
 
         <div class="nav-section-title">AWS RESOURCES</div>
@@ -1075,6 +1232,148 @@
 
         </div>
 
+      </section>
+
+      <!-- VIEW: WORKSPACE CENTRAL CONTROL (PHASE 1 SHELL) -->
+      <section id="view-workspace" class="content-view">
+        <div class="workspace-header-bar">
+          <div class="workspace-title-group">
+            <div class="workspace-badge-icon">
+              <i data-lucide="box" style="width: 24px; height: 24px;"></i>
+            </div>
+            <div>
+              <h2 class="workspace-main-title">AI Infrastructure Workspace</h2>
+              <p class="workspace-subtitle">Unified Operations Hub • Fleet Compute, AI Models & Automated Deployments</p>
+            </div>
+          </div>
+
+          <!-- SUB-NAVIGATION TABS -->
+          <div class="workspace-subtabs-nav">
+            <button class="workspace-tab-btn active" data-workspace-tab="overview">
+              <i data-lucide="layout-grid" style="width: 15px; height: 15px;"></i>
+              <span>Overview</span>
+            </button>
+            <button class="workspace-tab-btn" data-workspace-tab="servers">
+              <i data-lucide="server" style="width: 15px; height: 15px;"></i>
+              <span>Server Fleet</span>
+            </button>
+            <button class="workspace-tab-btn" data-workspace-tab="models">
+              <i data-lucide="cpu" style="width: 15px; height: 15px;"></i>
+              <span>AI Model Hub</span>
+            </button>
+            <button class="workspace-tab-btn" data-workspace-tab="deployments">
+              <i data-lucide="rocket" style="width: 15px; height: 15px;"></i>
+              <span>Deployments</span>
+            </button>
+            <button class="workspace-tab-btn" data-workspace-tab="activity">
+              <i data-lucide="activity" style="width: 15px; height: 15px;"></i>
+              <span>Activity Ledger</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 1: OVERVIEW -->
+        <div class="workspace-panel active" id="workspace-panel-overview">
+          <div class="workspace-stat-grid">
+            <div class="card glass-card workspace-stat-card">
+              <span class="insight-label">CONNECTED SERVERS</span>
+              <span class="insight-main-val">2 Nodes</span>
+              <span class="insight-sub-val" style="color: var(--accent-emerald);">● 100% Online & Reachable</span>
+            </div>
+            <div class="card glass-card workspace-stat-card">
+              <span class="insight-label">AI MODEL ENGINE</span>
+              <span class="insight-main-val">qwen2.5-coder</span>
+              <span class="insight-sub-val" style="color: var(--accent-cyan);">CPU-Optimized (0.5b / 1.5b)</span>
+            </div>
+            <div class="card glass-card workspace-stat-card">
+              <span class="insight-label">ACTIVE SERVICES</span>
+              <span class="insight-main-val">4 Healthy</span>
+              <span class="insight-sub-val" style="color: var(--text-secondary);">FastAPI, Ollama, Nginx, Docker</span>
+            </div>
+            <div class="card glass-card workspace-stat-card">
+              <span class="insight-label">WORKSPACE HEALTH INDEX</span>
+              <span class="insight-main-val">96 / 100</span>
+              <span class="insight-sub-val" style="color: var(--accent-emerald);">Nominal SRE Parameters</span>
+            </div>
+          </div>
+
+          <div class="card glass-card" style="padding: 24px;">
+            <div class="card-header" style="padding: 0 0 16px 0; margin-bottom: 16px;">
+              <div class="card-title-wrap">
+                <i data-lucide="sparkles" class="card-header-icon text-cyan"></i>
+                <h3>Workspace Central Dashboard</h3>
+              </div>
+              <span class="pulse-badge">● Phase 1 Shell Active</span>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
+              Welcome to the <strong>AI Infrastructure Workspace</strong>. This central control center provides unified visibility across EC2 host instances, local Ollama model lifecycle, continuous service deployments, and AI-grounded infrastructure actions. Full real-time metrics aggregation and model controls will be connected in subsequent phases.
+            </p>
+          </div>
+        </div>
+
+        <!-- TAB 2: SERVER FLEET (PLACEHOLDER) -->
+        <div class="workspace-panel" id="workspace-panel-servers">
+          <div class="card glass-card">
+            <div class="workspace-placeholder-box">
+              <div class="workspace-placeholder-icon">
+                <i data-lucide="server" style="width: 24px; height: 24px;"></i>
+              </div>
+              <h4 class="workspace-placeholder-title">Server Fleet Management</h4>
+              <p class="workspace-placeholder-desc">
+                Multi-node host telemetry, CPU/memory headroom monitors, and SSM/SSH status will be linked directly to the AWS EC2 collector in Phase 3.
+              </p>
+              <span class="workspace-phase-badge">CONNECTS IN PHASE 3</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: AI MODEL HUB (PLACEHOLDER) -->
+        <div class="workspace-panel" id="workspace-panel-models">
+          <div class="card glass-card">
+            <div class="workspace-placeholder-box">
+              <div class="workspace-placeholder-icon">
+                <i data-lucide="cpu" style="width: 24px; height: 24px;"></i>
+              </div>
+              <h4 class="workspace-placeholder-title">Local AI Model Repository</h4>
+              <p class="workspace-placeholder-desc">
+                Monitor loaded models in RAM, pull new model weights from Ollama, view VRAM footprints, and start/stop models dynamically without SSH terminal access.
+              </p>
+              <span class="workspace-phase-badge">CONNECTS IN PHASE 4</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: DEPLOYMENTS (PLACEHOLDER) -->
+        <div class="workspace-panel" id="workspace-panel-deployments">
+          <div class="card glass-card">
+            <div class="workspace-placeholder-box">
+              <div class="workspace-placeholder-icon">
+                <i data-lucide="rocket" style="width: 24px; height: 24px;"></i>
+              </div>
+              <h4 class="workspace-placeholder-title">Deployment & Service Controller</h4>
+              <p class="workspace-placeholder-desc">
+                Trigger rolling service restarts, inspect Jenkins build commits, inspect deployment logs, and review configuration rollbacks for application containers.
+              </p>
+              <span class="workspace-phase-badge">CONNECTS IN PHASE 5</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: ACTIVITY LEDGER (PLACEHOLDER) -->
+        <div class="workspace-panel" id="workspace-panel-activity">
+          <div class="card glass-card">
+            <div class="workspace-placeholder-box">
+              <div class="workspace-placeholder-icon">
+                <i data-lucide="activity" style="width: 24px; height: 24px;"></i>
+              </div>
+              <h4 class="workspace-placeholder-title">Unified Activity & Audit Ledger</h4>
+              <p class="workspace-placeholder-desc">
+                Audited timeline tracking manual remediations, deployment rollouts, AI recommendations, and system alerts with timestamp verification.
+              </p>
+              <span class="workspace-phase-badge">CONNECTS IN PHASE 6</span>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- VIEW: DETAILED RESOURCE VIEWS -->

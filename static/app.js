@@ -1,6 +1,7 @@
 // State Management
 const state = {
   activeView: 'dashboard',
+  activeWorkspaceTab: 'overview',
   metrics: null,
   rawMetrics: null,
   chatHistory: [],
@@ -27,7 +28,16 @@ const elements = {
   navButtons: document.querySelectorAll('.nav-item'),
   views: {
     dashboard: document.getElementById('view-dashboard'),
-    resources: document.getElementById('view-resources')
+    resources: document.getElementById('view-resources'),
+    workspace: document.getElementById('view-workspace')
+  },
+  workspaceTabButtons: document.querySelectorAll('.workspace-tab-btn'),
+  workspacePanels: {
+    overview: document.getElementById('workspace-panel-overview'),
+    servers: document.getElementById('workspace-panel-servers'),
+    models: document.getElementById('workspace-panel-models'),
+    deployments: document.getElementById('workspace-panel-deployments'),
+    activity: document.getElementById('workspace-panel-activity')
   },
   healthScoreValue: document.getElementById('healthScoreValue'),
   healthProgressRing: document.getElementById('healthProgressRing'),
@@ -195,6 +205,7 @@ function initEventListeners() {
     });
   }
 
+  // Sidebar primary navigation
   elements.navButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const view = btn.getAttribute('data-view');
@@ -231,6 +242,16 @@ function initEventListeners() {
       }
     });
   });
+
+  // Workspace sub-tabs navigation
+  if (elements.workspaceTabButtons) {
+    elements.workspaceTabButtons.forEach(tabBtn => {
+      tabBtn.addEventListener('click', () => {
+        const targetTab = tabBtn.getAttribute('data-workspace-tab');
+        switchWorkspaceTab(targetTab);
+      });
+    });
+  }
 
   if (elements.backToDashBtn) {
     elements.backToDashBtn.addEventListener('click', () => {
@@ -309,13 +330,37 @@ function initEventListeners() {
 
 function switchView(viewName) {
   state.activeView = viewName;
+  
+  // Hide all primary view containers safely
+  if (elements.views.dashboard) elements.views.dashboard.classList.remove('active');
+  if (elements.views.resources) elements.views.resources.classList.remove('active');
+  if (elements.views.workspace) elements.views.workspace.classList.remove('active');
+
   if (viewName === 'dashboard' || viewName === 'topology') {
     elements.views.dashboard.classList.add('active');
-    elements.views.resources.classList.remove('active');
+  } else if (viewName === 'workspace') {
+    elements.views.workspace.classList.add('active');
+    initLucide();
   } else {
-    elements.views.dashboard.classList.remove('active');
     elements.views.resources.classList.add('active');
   }
+}
+
+function switchWorkspaceTab(tabName) {
+  state.activeWorkspaceTab = tabName;
+
+  elements.workspaceTabButtons.forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-workspace-tab') === tabName);
+  });
+
+  Object.keys(elements.workspacePanels).forEach(key => {
+    const panel = elements.workspacePanels[key];
+    if (panel) {
+      panel.classList.toggle('active', key === tabName);
+    }
+  });
+
+  initLucide();
 }
 
 // -----------------------------------------------------------------------------
