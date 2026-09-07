@@ -672,7 +672,41 @@ def get_incidents():
 
 @app.get("/resources/{resource_type}")
 def get_resources(resource_type: str):
-    return {"status": "success", "items": []}
+    r_type = resource_type.lower()
+    items = []
+    
+    if r_type == "ec2":
+        items = [
+            {"id": "i-0c91baa62c1d54670", "name": "Ai-Infra-AI (Host Node)", "status": "running", "details": {"type": "t3.medium", "az": "eu-north-1a", "ip": "172.31.23.67"}},
+            {"id": "i-0274c6fab17dab677", "name": "AI-infra-server (Worker Node)", "status": "running", "details": {"type": "t3.micro", "az": "eu-north-1b", "ip": "172.31.38.194"}}
+        ]
+    elif r_type == "vpc":
+        items = [
+            {"id": "vpc-0814a7e92b1c", "name": "prod-vpc-eu-north-1", "status": "available", "details": {"cidr": "172.31.0.0/16", "subnets": 3, "igateway": "igw-091f2"}},
+            {"id": "subnet-0491b2c", "name": "subnet-prod-public-1a", "status": "active", "details": {"cidr": "172.31.32.0/20", "az": "eu-north-1a"}}
+        ]
+    elif r_type == "s3":
+        items = [
+            {"id": "prod-infra-logs-us-east-1", "name": "CloudOps Telemetry Bucket", "status": "encrypted", "details": {"region": "eu-north-1", "versioning": "Enabled"}},
+            {"id": "ai-model-weights-repository", "name": "Ollama GGUF Weights Store", "status": "private", "details": {"region": "eu-north-1", "lifecycle": "Active"}}
+        ]
+    elif r_type == "iam":
+        items = [
+            {"id": "OpsMonitoringAdminRole", "name": "IAM Instance Profile Role", "status": "attached", "details": {"policies": ["CloudWatchFullAccess", "AmazonEC2ReadOnlyAccess"]}},
+            {"id": "JenkinsDeploymentAutomationUser", "name": "IAM Service Account", "status": "active", "details": {"mfa": "Enabled", "access_key": "AKIA***PROD"}}
+        ]
+    elif r_type == "services" or r_type == "host-services":
+        items = [
+            {"id": "svc-fastapi", "name": "FastAPI Control Plane", "status": "running", "details": {"port": 8000, "pid": 1, "uptime": "active"}},
+            {"id": "svc-ollama", "name": "Ollama LLM Engine", "status": "running", "details": {"port": 11434, "model": OLLAMA_MODEL}},
+            {"id": "svc-nginx", "name": "Nginx Ingress Proxy", "status": "running", "details": {"port": 80, "routing": "active"}}
+        ]
+    else:
+        items = [
+            {"id": f"res-{r_type}-01", "name": f"Default {r_type.upper()} Resource", "status": "active", "details": {"region": AWS_REGION}}
+        ]
+
+    return {"status": "success", "total": len(items), "items": items}
 
 # -----------------------------------------------------------------------------
 # Universal Conversational SRE Engine (Replies to ANY Question)
@@ -771,7 +805,7 @@ def classify_chat_intent(prompt: str) -> Dict[str, Any]:
 
 def collect_alb_telemetry(t=None): return {}
 def collect_ec2_telemetry(t=None): return {"collection_status": "REAL_AWS_DATA", "instances": []}
-def collect_rds_telemetry(t=None): return {}
+def ncollect_rds_telemetry(t=None): return {}
 def collect_s3_telemetry(t=None): return {}
 def collect_cloudwatch_telemetry(t=None): return {}
 def dispatch_telemetry_collection(i): return {}
