@@ -49,6 +49,9 @@ const elements = {
   wsHealthIndex: document.getElementById('wsHealthIndex'),
   wsHealthSub: document.getElementById('wsHealthSub'),
   workspaceServersContainer: document.getElementById('workspaceServersContainer'),
+  workspaceModelsTableBody: document.getElementById('workspaceModelsTableBody'),
+  modelPullInput: document.getElementById('modelPullInput'),
+  modelPullBtn: document.getElementById('modelPullBtn'),
 
   healthScoreValue: document.getElementById('healthScoreValue'),
   healthProgressRing: document.getElementById('healthProgressRing'),
@@ -194,12 +197,14 @@ function startDataPolling() {
   fetchIncidents();
   fetchWorkspaceSummary();
   fetchWorkspaceServers();
+  fetchWorkspaceModels();
 
   state.pollTimers.push(setInterval(fetchMetrics, 3000));
   state.pollTimers.push(setInterval(fetchAnomalies, 4000));
   state.pollTimers.push(setInterval(fetchLogs, 5000));
   state.pollTimers.push(setInterval(fetchWorkspaceSummary, 6000));
   state.pollTimers.push(setInterval(fetchWorkspaceServers, 10000));
+  state.pollTimers.push(setInterval(fetchWorkspaceModels, 12000));
   state.pollTimers.push(setInterval(fetchCloudWatchFleetMetrics, 30000));
 }
 
@@ -209,7 +214,7 @@ function stopDataPolling() {
 }
 
 // -----------------------------------------------------------------------------
-// WORKSPACE: Live Summary & Server Fleet Handlers
+// WORKSPACE: Summary, Fleet & Model Management Handlers
 // -----------------------------------------------------------------------------
 async function fetchWorkspaceSummary() {
   if (!state.isAuthenticated) return;
@@ -358,6 +363,80 @@ function renderWorkspaceServersUI(servers) {
   initLucide();
 }
 
+async function fetchWorkspaceModels() {
+  if (!state.isAuthenticated) return;
+  try {
+    const res = await fetch('/api/workspace/models');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderWorkspaceModelsUI(data.models || []);
+  } catch (err) {
+    console.error('Workspace models fetch error:', err);
+  }
+}
+
+function renderWorkspaceModelsUI(models) {
+  if (!elements.workspaceModelsTableBody) return;
+  elements.workspaceModelsTableBody.innerHTML = '';
+
+  if (models.length === 0) {
+    elements.workspaceModelsTableBody.innerHTML = '<tr><td colspan="8" class="text-center">No models found in repository.</td></tr>';
+    return;
+  }
+
+  models.forEach(m => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong><code>${m.name}</code></strong></td>
+      <td><span class="badge-status-pill">${m.parameter_size}</span></td>
+      <td><code>${m.quantization_level}</code></td>
+      <td>${m.size_mb} MB</td>
+      <td>
+        <span class="model-status-badge ${m.is_active ? 'in-memory' : 'idle'}">
+          ● ${m.status}
+        </span>
+      </td>
+      <td><strong style="color:var(--accent-cyan);">${m.ram_allocation_mb} MB</strong></td>
+      <td><span style="font-size:0.75rem; color:var(--text-muted);">${m.server}</span></td>
+      <td>
+        <div style="display:flex; gap:6px;">
+          ${
+            m.is_active
+              ? `<button class="action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-amber); color:var(--accent-amber);" onclick="triggerModelAction('${m.name}', 'unload')">
+                  <i data-lucide="power" style="width:12px; height:12px;"></i> Unload
+                 </button>`
+              : `<button class="action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="triggerModelAction('${m.name}', 'load')">
+                  <i data-lucide="zap" style="width:12px; height:12px;"></i> Pin RAM
+                 </button>`
+          }
+          <button class="action-btn" style="padding:4px 8px; font-size:0.75rem;" onclick="sendPromptToAi('Benchmark latency and token throughput for model: ${m.name}')">
+            <i data-lucide="sparkles" style="width:12px; height:12px;"></i>
+          </button>
+        </div>
+      </td>
+    `;
+    elements.workspaceModelsTableBody.appendChild(tr);
+  });
+
+  initLucide();
+}
+
+window.triggerModelAction = async function(modelName, actionType) {
+  try {
+    const res = await fetch('/api/workspace/models/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: modelName, action: actionType })
+    });
+    const data = await res.json();
+    fetchWorkspaceModels();
+    fetchWorkspaceSummary();
+    fetchLogs();
+  } catch (err) {
+    console.error(`Model action ${actionType} failed:`, err);
+  }
+};
+
 // -----------------------------------------------------------------------------
 // Navigation & Event Listeners
 // -----------------------------------------------------------------------------
@@ -418,6 +497,16 @@ function initEventListeners() {
     });
   }
 
+  // Model Hub pull action
+  if (elements.modelPullBtn && elements.modelPullInput) {
+    elements.modelPullBtn.addEventListener('click', () => {
+      const targetModel = elements.modelPullInput.value.trim();
+      if (!targetModel) return;
+      triggerModelAction(targetModel, 'pull');
+      elements.modelPullInput.value = '';
+    });
+  }
+
   if (elements.backToDashBtn) {
     elements.backToDashBtn.addEventListener('click', () => {
       elements.navButtons.forEach(b => b.classList.remove('active'));
@@ -437,6 +526,7 @@ function initEventListeners() {
       fetchIncidents();
       fetchWorkspaceSummary();
       fetchWorkspaceServers();
+      fetchWorkspaceModels();
     });
   }
 
@@ -509,6 +599,8 @@ function switchView(viewName) {
     fetchWorkspaceSummary();
     if (state.activeWorkspaceTab === 'servers') {
       fetchWorkspaceServers();
+    } else if (state.activeWorkspaceTab === 'models') {
+      fetchWorkspaceModels();
     }
     initLucide();
   } else {
@@ -532,6 +624,8 @@ function switchWorkspaceTab(tabName) {
 
   if (tabName === 'servers') {
     fetchWorkspaceServers();
+  } else if (tabName === 'models') {
+    fetchWorkspaceModels();
   }
 
   initLucide();
@@ -647,6 +741,7 @@ window.triggerRemediation = async function(anomalyId, actionType, target) {
     fetchMetrics();
     fetchWorkspaceSummary();
     fetchWorkspaceServers();
+    fetchWorkspaceModels();
   } catch (err) {
     console.error('Remediation error:', err);
   }

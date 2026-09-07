@@ -699,7 +699,7 @@
       gap: 8px;
     }
 
-    /* SERVER FLEET CARD GRID STYLES (PHASE 3) */
+    /* SERVER FLEET CARD GRID STYLES */
     .servers-fleet-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
@@ -787,6 +787,58 @@
       justify-content: space-between;
       gap: 8px;
       margin-top: 4px;
+    }
+
+    /* AI MODEL HUB STYLES (PHASE 4) */
+    .models-hub-card {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .models-pull-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-glass);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      flex-wrap: wrap;
+    }
+    .models-pull-input {
+      flex: 1;
+      min-width: 220px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-glass);
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      color: #fff;
+      font-size: 0.84rem;
+      font-family: var(--font-mono);
+      outline: none;
+    }
+    .models-pull-input:focus {
+      border-color: var(--border-focus);
+    }
+    .model-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+    }
+    .model-status-badge.in-memory {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .model-status-badge.idle {
+      background: rgba(148, 163, 184, 0.12);
+      color: #94a3b8;
+      border: 1px solid rgba(148, 163, 184, 0.2);
     }
 
     .workspace-placeholder-box {
@@ -1399,7 +1451,7 @@
           </div>
         </div>
 
-        <!-- TAB 2: SERVER FLEET (PHASE 3 ACTIVE) -->
+        <!-- TAB 2: SERVER FLEET -->
         <div class="workspace-panel" id="workspace-panel-servers">
           <div class="servers-fleet-grid" id="workspaceServersContainer">
             <div class="card glass-card" style="padding: 24px; grid-column: 1 / -1; text-align: center;">
@@ -1408,19 +1460,44 @@
           </div>
         </div>
 
-        <!-- TAB 3: AI MODEL HUB (PLACEHOLDER) -->
+        <!-- TAB 3: AI MODEL HUB (PHASE 4 ACTIVE) -->
         <div class="workspace-panel" id="workspace-panel-models">
-          <div class="card glass-card">
-            <div class="workspace-placeholder-box">
-              <div class="workspace-placeholder-icon">
-                <i data-lucide="cpu" style="width: 24px; height: 24px;"></i>
+          <div class="card glass-card models-hub-card">
+            
+            <!-- MODEL PULL CONTROL BAR -->
+            <div class="models-pull-bar">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="download-cloud" class="text-cyan" style="width: 20px; height: 20px;"></i>
+                <span style="font-size: 0.84rem; font-weight: 600;">Pull Model from Registry:</span>
               </div>
-              <h4 class="workspace-placeholder-title">Local AI Model Repository</h4>
-              <p class="workspace-placeholder-desc">
-                Monitor loaded models in RAM, pull new model weights from Ollama, view VRAM footprints, and start/stop models dynamically without SSH terminal access.
-              </p>
-              <span class="workspace-phase-badge">CONNECTS IN PHASE 4</span>
+              <input type="text" id="modelPullInput" class="models-pull-input" placeholder="e.g. qwen2.5-coder:0.5b, deepseek-r1:1.5b...">
+              <button class="action-btn" id="modelPullBtn" style="padding: 8px 16px; font-size: 0.82rem;">
+                <i data-lucide="download" style="width: 14px; height: 14px;"></i>
+                <span>Pull Model</span>
+              </button>
             </div>
+
+            <!-- MODELS REPOSITORY TABLE -->
+            <div class="table-responsive" style="max-height: none;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Model Tag</th>
+                    <th>Parameters</th>
+                    <th>Quantization</th>
+                    <th>Disk Footprint</th>
+                    <th>Runtime State</th>
+                    <th>RAM In-Use</th>
+                    <th>Host Node</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="workspaceModelsTableBody">
+                  <tr><td colspan="8" class="text-center">Synchronizing local AI models...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
           </div>
         </div>
 
