@@ -26,7 +26,7 @@ load_dotenv()
 app = FastAPI(
     title="AWS Infrastructure AI Assistant API",
     description="Dynamic CloudOps AI engine with targeted AWS telemetry grounding.",
-    version="3.3.4"
+    version="3.3.5"
 )
 
 app.add_middleware(
@@ -89,7 +89,7 @@ class ModelActionRequest(BaseModel):
 
 class DeploymentActionRequest(BaseModel):
     service_id: str
-    action: str  # "restart", "reload"
+    action: str
 
 # -----------------------------------------------------------------------------
 # Base AWS Session
@@ -190,7 +190,7 @@ def auth_login(req: LoginRequest):
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
 # -----------------------------------------------------------------------------
-# WORKSPACE: Summary, Server Fleet, Models & Deployments Endpoints
+# WORKSPACE: Summary, Server Fleet, Models & Deployments
 # -----------------------------------------------------------------------------
 @app.get("/api/workspace/summary")
 async def get_workspace_summary():
@@ -419,9 +419,6 @@ async def execute_model_action(req: ModelActionRequest):
 
     raise HTTPException(status_code=400, detail=f"Unsupported model action: {action}")
 
-# -----------------------------------------------------------------------------
-# WORKSPACE PHASE 5: Deployments & Continuous Delivery Endpoints
-# -----------------------------------------------------------------------------
 @app.get("/api/workspace/deployments")
 def get_workspace_deployments():
     uptime_sec = int(time.time() - START_TIME)
@@ -511,6 +508,38 @@ def execute_deployment_action(req: DeploymentActionRequest):
         "action": req.action,
         "message": f"Deployment action '{act}' executed successfully on '{svc}'."
     }
+
+# -----------------------------------------------------------------------------
+# WORKSPACE PHASE 6: Unified Activity Ledger Endpoint
+# -----------------------------------------------------------------------------
+@app.get("/api/workspace/activity")
+def get_workspace_activity(limit: int = 50):
+    events = []
+    
+    # 1. System & Deployment events
+    for l in system_logs[:limit]:
+        events.append({
+            "id": l["id"],
+            "timestamp": l["timestamp"],
+            "source": l["source"],
+            "category": "Deployment" if "Deployment" in l["source"] else ("Model" if "Model" in l["source"] else "System"),
+            "severity": l["level"],
+            "message": l["message"]
+        })
+    
+    # 2. Incident & Remediation events
+    for inc in incident_history[:limit]:
+        events.append({
+            "id": inc["id"],
+            "timestamp": inc["end_time"],
+            "source": "AutoRemediate",
+            "category": "Remediation",
+            "severity": "INFO",
+            "message": f"Remediation action '{inc['action']}' applied to {inc['target']}."
+        })
+        
+    events.sort(key=lambda x: x["timestamp"], reverse=True)
+    return {"status": "success", "total": len(events), "activity": events[:limit]}
 
 # -----------------------------------------------------------------------------
 # MODULE 1: Deterministic Intent & Resource Classifier
@@ -858,7 +887,7 @@ async def get_ai_server_health():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.3.4"}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "3.3.5"}
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():

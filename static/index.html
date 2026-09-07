@@ -592,6 +592,42 @@
     .message-content { background: rgba(255, 255, 255, 0.04); padding: 12px 14px; border-radius: var(--radius-md); max-width: 82%; line-height: 1.5; border: 1px solid var(--border-glass); word-break: break-word; }
     .chat-message.user .message-content { background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); }
 
+    .ai-action-runbook-card {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .ai-runbook-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+    .ai-runbook-btn {
+      align-self: flex-start;
+      background: var(--accent-cyan);
+      color: #000;
+      font-size: 0.76rem;
+      font-weight: 700;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 5px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ai-runbook-btn:hover {
+      background: #7dd3fc;
+    }
+
     .ai-input-wrapper { padding: 16px 20px; border-top: 1px solid var(--border-glass); }
     .input-form { display: flex; gap: 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-glass); border-radius: var(--radius-md); padding: 6px 8px; }
     .input-form textarea { flex: 1; background: transparent; border: none; color: #fff; font-family: var(--font-sans); font-size: 0.84rem; resize: none; outline: none; }
@@ -841,56 +877,19 @@
       border: 1px solid rgba(148, 163, 184, 0.2);
     }
 
-    /* DEPLOYMENT PANEL STYLES (PHASE 5) */
-    .deployments-hub-card {
+    /* DEPLOYMENTS & ACTIVITY LEDGER STYLES (PHASE 5 & 6) */
+    .deployments-hub-card,
+    .activity-ledger-card {
       padding: 24px;
       display: flex;
       flex-direction: column;
       gap: 20px;
     }
-
-    .workspace-placeholder-box {
-      padding: 48px 24px;
+    .activity-filter-bar {
       display: flex;
-      flex-direction: column;
       align-items: center;
-      text-align: center;
       gap: 12px;
-      border: 1px dashed rgba(255, 255, 255, 0.12);
-      border-radius: var(--radius-lg);
-      background: rgba(255, 255, 255, 0.01);
-    }
-    .workspace-placeholder-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: var(--radius-full);
-      background: rgba(56, 189, 248, 0.1);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--accent-cyan);
-      margin-bottom: 4px;
-    }
-    .workspace-placeholder-title {
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-    .workspace-placeholder-desc {
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      max-width: 460px;
-      line-height: 1.5;
-    }
-    .workspace-phase-badge {
-      font-size: 0.7rem;
-      font-family: var(--font-mono);
-      color: var(--accent-cyan);
-      background: rgba(56, 189, 248, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      padding: 3px 8px;
-      border-radius: var(--radius-full);
-      margin-top: 6px;
+      flex-wrap: wrap;
     }
 
     /* Color Classes */
@@ -1516,7 +1515,7 @@
           </div>
         </div>
 
-        <!-- TAB 4: DEPLOYMENTS (PHASE 5 ACTIVE) -->
+        <!-- TAB 4: DEPLOYMENTS -->
         <div class="workspace-panel" id="workspace-panel-deployments">
           <div class="card glass-card deployments-hub-card">
             <div class="card-header" style="padding: 0 0 16px 0; margin-bottom: 8px;">
@@ -1549,18 +1548,43 @@
           </div>
         </div>
 
-        <!-- TAB 5: ACTIVITY LEDGER (PLACEHOLDER) -->
+        <!-- TAB 5: ACTIVITY LEDGER (PHASE 6 ACTIVE) -->
         <div class="workspace-panel" id="workspace-panel-activity">
-          <div class="card glass-card">
-            <div class="workspace-placeholder-box">
-              <div class="workspace-placeholder-icon">
-                <i data-lucide="activity" style="width: 24px; height: 24px;"></i>
+          <div class="card glass-card activity-ledger-card">
+            <div class="card-header" style="padding: 0 0 16px 0; margin-bottom: 8px;">
+              <div class="card-title-wrap">
+                <i data-lucide="activity" class="card-header-icon text-cyan"></i>
+                <h3>Unified Infrastructure Audit & Activity Ledger</h3>
               </div>
-              <h4 class="workspace-placeholder-title">Unified Activity & Audit Ledger</h4>
-              <p class="workspace-placeholder-desc">
-                Audited timeline tracking manual remediations, deployment rollouts, AI recommendations, and system alerts with timestamp verification.
-              </p>
-              <span class="workspace-phase-badge">CONNECTS IN PHASE 6</span>
+              <div class="activity-filter-bar">
+                <select id="wsActivityCategoryFilter" class="log-filter-select">
+                  <option value="ALL">All Categories</option>
+                  <option value="Deployment">Deployments</option>
+                  <option value="Model">AI Models</option>
+                  <option value="Remediation">Remediations</option>
+                  <option value="System">System Telemetry</option>
+                </select>
+                <button class="action-btn" id="wsRefreshActivityBtn" style="padding:4px 10px; font-size:0.75rem;">
+                  <i data-lucide="refresh-cw" style="width:12px; height:12px;"></i> Refresh
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive" style="max-height: none;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Category</th>
+                    <th>Source Engine</th>
+                    <th>Severity</th>
+                    <th>Audit Event Description</th>
+                  </tr>
+                </thead>
+                <tbody id="workspaceActivityTableBody">
+                  <tr><td colspan="5" class="text-center">Loading activity ledger...</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

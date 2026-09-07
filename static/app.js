@@ -6,6 +6,7 @@ const state = {
   rawMetrics: null,
   chatHistory: [],
   logs: [],
+  activityList: [],
   topology: null,
   isSimulatedActive: false,
   isAuthenticated: false,
@@ -52,6 +53,9 @@ const elements = {
   workspaceModelsTableBody: document.getElementById('workspaceModelsTableBody'),
   workspaceDeploymentsTableBody: document.getElementById('workspaceDeploymentsTableBody'),
   wsDeploymentsCountBadge: document.getElementById('wsDeploymentsCountBadge'),
+  workspaceActivityTableBody: document.getElementById('workspaceActivityTableBody'),
+  wsActivityCategoryFilter: document.getElementById('wsActivityCategoryFilter'),
+  wsRefreshActivityBtn: document.getElementById('wsRefreshActivityBtn'),
   modelPullInput: document.getElementById('modelPullInput'),
   modelPullBtn: document.getElementById('modelPullBtn'),
 
@@ -201,6 +205,7 @@ function startDataPolling() {
   state.pollTimers.push(setInterval(fetchWorkspaceServers, 10000));
   state.pollTimers.push(setInterval(fetchWorkspaceModels, 12000));
   state.pollTimers.push(setInterval(fetchWorkspaceDeployments, 15000));
+  state.pollTimers.push(setInterval(fetchWorkspaceActivity, 15000));
   state.pollTimers.push(setInterval(fetchCloudWatchFleetMetrics, 30000));
 }
 
@@ -230,7 +235,8 @@ async function dispatchGlobalRefresh() {
       fetchWorkspaceSummary(),
       fetchWorkspaceServers(),
       fetchWorkspaceModels(),
-      fetchWorkspaceDeployments()
+      fetchWorkspaceDeployments(),
+      fetchWorkspaceActivity()
     ]);
   } finally {
     setTimeout(() => {
@@ -242,7 +248,7 @@ async function dispatchGlobalRefresh() {
 }
 
 // -----------------------------------------------------------------------------
-// WORKSPACE: Summary, Fleet, Models & Deployments Handlers
+// WORKSPACE: Summary, Fleet, Models, Deployments & Activity
 // -----------------------------------------------------------------------------
 async function fetchWorkspaceSummary() {
   if (!state.isAuthenticated) return;
@@ -460,14 +466,12 @@ window.triggerModelAction = async function(modelName, actionType) {
     fetchWorkspaceModels();
     fetchWorkspaceSummary();
     fetchLogs();
+    fetchWorkspaceActivity();
   } catch (err) {
     console.error(`Model action ${actionType} failed:`, err);
   }
 };
 
-// -----------------------------------------------------------------------------
-// WORKSPACE: Deployments Fetcher & Lifecycle Action Handlers
-// -----------------------------------------------------------------------------
 async function fetchWorkspaceDeployments() {
   if (!state.isAuthenticated) return;
   try {
@@ -547,6 +551,7 @@ window.triggerDeploymentAction = async function(serviceName, actionType, btnElem
     await fetchLogs();
     await fetchWorkspaceDeployments();
     await fetchWorkspaceSummary();
+    await fetchWorkspaceActivity();
   } catch (err) {
     console.error(`Deployment action ${actionType} failed:`, err);
   } finally {
@@ -559,6 +564,49 @@ window.triggerDeploymentAction = async function(serviceName, actionType, btnElem
     }
   }
 };
+
+// -----------------------------------------------------------------------------
+// WORKSPACE PHASE 6: Unified Activity Ledger Handlers
+// -----------------------------------------------------------------------------
+async function fetchWorkspaceActivity() {
+  if (!state.isAuthenticated) return;
+  try {
+    const res = await fetch('/api/workspace/activity?limit=40');
+    if (!res.ok) return;
+    const data = await res.json();
+    state.activityList = data.activity || [];
+    renderWorkspaceActivityUI();
+  } catch (err) {
+    console.error('Workspace activity fetch error:', err);
+  }
+}
+
+function renderWorkspaceActivityUI() {
+  if (!elements.workspaceActivityTableBody) return;
+  elements.workspaceActivityTableBody.innerHTML = '';
+
+  const filter = elements.wsActivityCategoryFilter ? elements.wsActivityCategoryFilter.value : 'ALL';
+  const filtered = filter === 'ALL' ? state.activityList : state.activityList.filter(a => a.category === filter);
+
+  if (filtered.length === 0) {
+    elements.workspaceActivityTableBody.innerHTML = '<tr><td colspan="5" class="text-center">No recorded activity for this filter.</td></tr>';
+    return;
+  }
+
+  filtered.forEach(ev => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-family:var(--font-mono); font-size:0.76rem; color:var(--text-muted);">${ev.timestamp}</td>
+      <td><span class="badge-status-pill">${ev.category}</span></td>
+      <td><strong style="color:var(--accent-purple);">${ev.source}</strong></td>
+      <td>
+        <span class="log-lvl ${ev.severity}" style="font-weight:700; font-size:0.74rem;">[${ev.severity}]</span>
+      </td>
+      <td style="color:var(--text-secondary); word-break:break-word;">${ev.message}</td>
+    `;
+    elements.workspaceActivityTableBody.appendChild(tr);
+  });
+}
 
 // -----------------------------------------------------------------------------
 // Live Log Stream
@@ -596,15 +644,297 @@ function renderLogs() {
     elements.dashboardLogBox.appendChild(row);
   });
   
-  // Set scrollTop to 0 to prioritize displaying the newest logs at the top
   elements.dashboardLogBox.scrollTop = 0;
+}
+
+// -----------------------------------------------------------------------------
+// AWS Resource Catalog Tables
+// -----------------------------------------------------------------------------
+async function renderResourceTable(type) {
+  switchView(type);
+  elements.resourceViewTitle.textContent = `${type.toUpperCase()} Resources`;
+  elements.resourceViewSubtitle.textContent = `Managing live AWS cloud inventory catalog for ${type.toUpperCase()}`;
+
+  elements.resourceTableHeader.innerHTML = `
+    <tr>
+      <th>Resource ID</th>
+      <th>Name / Tag</th>
+      <th>Status</th>
+      <th>Attributes</th>
+      <th>Action</th>
+    </tr>
+  `;
+  elements.resourceTableBody.innerHTML = '<tr><td colspan="5">Loading cloud inventory...</td></tr>';
+
+  try {
+    const res = await fetch(`/resources/${type}`);
+    const data = await res.json();
+    const items = data.items || [];
+    elements.resourceCountDisplay.textContent = `Showing ${items.length} items (${data.source || 'inventory'})`;
+    elements.resourceTableBody.innerHTML = '';
+
+    items.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><code>${item.id || item.name}</code></td>
+        <td><strong>${item.name || item.id}</strong></td>
+        <td><span class="health-pill healthy">${item.status || 'Active'}</span></td>
+        <td>${JSON.stringify(item.details || {})}</td>
+        <td>
+          <button class="action-btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendPromptToAi('Audit resource ${item.id || item.name}')">
+            Audit
+          </button>
+        </td>
+      `;
+      elements.resourceTableBody.appendChild(tr);
+    });
+  } catch (err) {
+    elements.resourceTableBody.innerHTML = '<tr><td colspan="5">Resource details synchronized via live inventory.</td></tr>';
+  }
+}
+
+// -----------------------------------------------------------------------------
+// AI SRE Assistant with Action Runbook Detection (Phase 6)
+// -----------------------------------------------------------------------------
+async function sendAiMessage() {
+  const text = elements.aiChatInput.value.trim();
+  if (!text) return;
+
+  appendChatMessage('user', text);
+  elements.aiChatInput.value = '';
+  elements.aiChatInput.disabled = true;
+  elements.sendAiChatBtn.disabled = true;
+
+  const loadingId = appendLoadingMessage();
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        history: state.chatHistory,
+        include_system_context: true
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP Error ${res.status}: Server returned an invalid response.`);
+    }
+
+    const data = await res.json();
+    removeMessageById(loadingId);
+
+    const replyContent = data.reply || 'No response returned from the assistant.';
+    
+    // Check if user prompt requests an infrastructure action to append a runbook approval card
+    let runbookActionHtml = '';
+    const lowerP = text.toLowerCase();
+    if (lowerP.includes('restart nginx')) {
+      runbookActionHtml = `
+        <div class="ai-action-runbook-card">
+          <div class="ai-runbook-header">
+            <span>⚡ SRE RUNBOOK ACTION RECOMMENDED</span>
+            <span>nginx.service</span>
+          </div>
+          <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Target: Ingress reverse proxy port :80 on host node.</p>
+          <button class="ai-runbook-btn" onclick="triggerDeploymentAction('nginx', 'restart'); this.disabled=true; this.textContent='✓ Executed';">
+            Approve & Execute Restart
+          </button>
+        </div>`;
+    } else if (lowerP.includes('restart api') || lowerP.includes('restart fastapi')) {
+      runbookActionHtml = `
+        <div class="ai-action-runbook-card">
+          <div class="ai-runbook-header">
+            <span>⚡ SRE RUNBOOK ACTION RECOMMENDED</span>
+            <span>aws-infra-api</span>
+          </div>
+          <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Target: Core FastAPI AI Engine port :8000 on host node.</p>
+          <button class="ai-runbook-btn" onclick="triggerDeploymentAction('aws-infra-api', 'restart'); this.disabled=true; this.textContent='✓ Executed';">
+            Approve & Execute Restart
+          </button>
+        </div>`;
+    }
+
+    appendChatMessage('assistant', replyContent + runbookActionHtml);
+
+    state.chatHistory.push({ role: 'user', content: text });
+    state.chatHistory.push({ role: 'assistant', content: replyContent });
+
+  } catch (err) {
+    console.error('Chat error:', err);
+    removeMessageById(loadingId);
+    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI model. Please verify your backend server and Ollama instance are running.');
+  } finally {
+    elements.aiChatInput.disabled = false;
+    elements.sendAiChatBtn.disabled = false;
+    elements.aiChatInput.focus();
+  }
+}
+
+function appendChatMessage(role, content) {
+  const msgDiv = document.createElement('div');
+  msgDiv.className = `chat-message ${role}`;
+  msgDiv.innerHTML = `
+    <div class="message-avatar">
+      <i data-lucide="${role === 'assistant' ? 'bot' : 'user'}"></i>
+    </div>
+    <div class="message-content">${formatMarkdown(content)}</div>
+  `;
+  elements.aiChatMessages.appendChild(msgDiv);
+  elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
+  initLucide();
+}
+
+function appendLoadingMessage() {
+  const id = 'loading-' + Date.now();
+  const msgDiv = document.createElement('div');
+  msgDiv.id = id;
+  msgDiv.className = 'chat-message assistant';
+  msgDiv.innerHTML = `
+    <div class="message-avatar"><i data-lucide="bot"></i></div>
+    <div class="message-content" style="color:var(--text-muted);">
+      <em>Analyzing telemetry and formulating runbook...</em>
+    </div>
+  `;
+  elements.aiChatMessages.appendChild(msgDiv);
+  elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
+  initLucide();
+  return id;
+}
+
+function removeMessageById(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+window.sendPromptToAi = function(promptText) {
+  if (elements.aiAssistantPanel) {
+    elements.aiAssistantPanel.classList.add('open');
+  }
+  if (elements.aiChatInput) {
+    elements.aiChatInput.value = promptText;
+  }
+  sendAiMessage();
+};
+
+function formatMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/```bash([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
+    .replace(/```json([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
+    .replace(/```([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
+    .replace(/^#### (.*$)/gim, '<h5 style="color:var(--accent-cyan);margin:8px 0 4px 0;font-size:0.86rem;">$1</h5>')
+    .replace(/^### (.*$)/gim, '<h4 style="color:#fff;margin:10px 0 6px 0;font-size:0.95rem;font-weight:700;">$1</h4>')
+    .replace(/^## (.*$)/gim, '<h3 style="color:#fff;margin:12px 0 6px 0;font-size:1.05rem;font-weight:700;">$1</h3>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/^\s*-\s+(.*$)/gim, '<li style="margin-left:14px;list-style-type:disc;">$1</li>')
+    .replace(/\n/g, '<br>');
+}
+
+// -----------------------------------------------------------------------------
+// CloudWatch Fleet Metrics
+// -----------------------------------------------------------------------------
+async function fetchCloudWatchFleetMetrics() {
+  if (!state.isAuthenticated) return;
+  try {
+    const res = await fetch('/api/cloudwatch/ec2-metrics');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const cpuEl = document.getElementById('cwLatestCpu');
+    const badgeEl = document.getElementById('cwSourceBadge');
+    
+    if (cpuEl) cpuEl.textContent = `${data.latest_cpu_percent}%`;
+    if (badgeEl) {
+      badgeEl.textContent = data.source === 'aws-cloudwatch' ? 'AWS Live (1h)' : 'Simulated (1h)';
+      badgeEl.style.color = data.source === 'aws-cloudwatch' ? 'var(--accent-emerald)' : 'var(--accent-amber)';
+    }
+
+    const canvas = document.getElementById('cwMetricChart');
+    if (!canvas || !data.history || data.history.length === 0) return;
+
+    const ctx = canvas.getContext('2d');
+    const points = data.history.map(d => d.average);
+    const width = canvas.width;
+    const height = canvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    ctx.beginPath();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    const step = width / (points.length - 1 || 1);
+    const maxVal = Math.max(...points, 100);
+
+    points.forEach((val, i) => {
+      const x = i * step;
+      const y = height - (val / maxVal) * (height - 10) - 5;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    ctx.lineTo(width, height);
+    ctx.lineTo(0, height);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
+    grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+  } catch (err) {
+    console.error('CloudWatch metrics fetch error:', err);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Incident Audit Timeline
+// -----------------------------------------------------------------------------
+async function fetchIncidents() {
+  if (!state.isAuthenticated) return;
+  try {
+    const res = await fetch('/api/incidents');
+    const data = await res.json();
+    const timeline = document.getElementById('incidentTimeline');
+    const pill = document.getElementById('incidentCountPill');
+    if (!timeline) return;
+
+    if (pill) pill.textContent = `${data.incidents.length} Records`;
+    timeline.innerHTML = '';
+
+    if (!data.incidents || data.incidents.length === 0) {
+      timeline.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">No incidents logged.</p>';
+      return;
+    }
+
+    data.incidents.forEach(inc => {
+      const el = document.createElement('div');
+      el.style.cssText = 'border-bottom:1px solid rgba(255,255,255,0.06); padding:8px 0; font-size:0.8rem;';
+      el.innerHTML = `
+        <div style="display:flex; justify-content:space-between;">
+          <strong style="color:var(--accent-emerald);">⚡ Action: ${inc.action} (${inc.target})</strong>
+          <span style="color:var(--text-muted);">${inc.end_time}</span>
+        </div>
+        <div style="color:var(--text-secondary); margin-top:2px;">${inc.details}</div>
+        <div style="color:var(--accent-cyan); font-size:0.75rem; margin-top:2px;">Post-Health Score: ${inc.health_post_action}/100</div>
+      `;
+      timeline.appendChild(el);
+    });
+  } catch (err) {
+    console.error('Fetch incidents error:', err);
+  }
 }
 
 // -----------------------------------------------------------------------------
 // Navigation & Event Listeners
 // -----------------------------------------------------------------------------
 function initEventListeners() {
-  // Master Refresh Button with Rotation Animation
   const refreshBtn = document.getElementById('refreshAllBtn');
   if (refreshBtn) {
     refreshBtn.onclick = function(e) {
@@ -677,6 +1007,14 @@ function initEventListeners() {
       triggerModelAction(targetModel, 'pull');
       elements.modelPullInput.value = '';
     });
+  }
+
+  // Activity Ledger Category Filter & Refresh
+  if (elements.wsActivityCategoryFilter) {
+    elements.wsActivityCategoryFilter.addEventListener('change', renderWorkspaceActivityUI);
+  }
+  if (elements.wsRefreshActivityBtn) {
+    elements.wsRefreshActivityBtn.addEventListener('click', fetchWorkspaceActivity);
   }
 
   if (elements.backToDashBtn) {
@@ -761,6 +1099,8 @@ function switchView(viewName) {
       fetchWorkspaceModels();
     } else if (state.activeWorkspaceTab === 'deployments') {
       fetchWorkspaceDeployments();
+    } else if (state.activeWorkspaceTab === 'activity') {
+      fetchWorkspaceActivity();
     }
     initLucide();
   } else {
@@ -788,6 +1128,8 @@ function switchWorkspaceTab(tabName) {
     fetchWorkspaceModels();
   } else if (tabName === 'deployments') {
     fetchWorkspaceDeployments();
+  } else if (tabName === 'activity') {
+    fetchWorkspaceActivity();
   }
 
   initLucide();
@@ -1049,260 +1391,6 @@ window.inspectNode = function(nodeId) {
 
   elements.nodeModal.classList.add('open');
 };
-
-// -----------------------------------------------------------------------------
-// AWS Resource Catalog Tables
-// -----------------------------------------------------------------------------
-async function renderResourceTable(type) {
-  switchView(type);
-  elements.resourceViewTitle.textContent = `${type.toUpperCase()} Resources`;
-  elements.resourceViewSubtitle.textContent = `Managing live AWS cloud inventory catalog for ${type.toUpperCase()}`;
-
-  elements.resourceTableHeader.innerHTML = `
-    <tr>
-      <th>Resource ID</th>
-      <th>Name / Tag</th>
-      <th>Status</th>
-      <th>Attributes</th>
-      <th>Action</th>
-    </tr>
-  `;
-  elements.resourceTableBody.innerHTML = '<tr><td colspan="5">Loading cloud inventory...</td></tr>';
-
-  try {
-    const res = await fetch(`/resources/${type}`);
-    const data = await res.json();
-    const items = data.items || [];
-    elements.resourceCountDisplay.textContent = `Showing ${items.length} items (${data.source || 'inventory'})`;
-    elements.resourceTableBody.innerHTML = '';
-
-    items.forEach(item => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><code>${item.id || item.name}</code></td>
-        <td><strong>${item.name || item.id}</strong></td>
-        <td><span class="health-pill healthy">${item.status || 'Active'}</span></td>
-        <td>${JSON.stringify(item.details || {})}</td>
-        <td>
-          <button class="action-btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendPromptToAi('Audit resource ${item.id || item.name}')">
-            Audit
-          </button>
-        </td>
-      `;
-      elements.resourceTableBody.appendChild(tr);
-    });
-  } catch (err) {
-    elements.resourceTableBody.innerHTML = '<tr><td colspan="5">Resource details synchronized via live inventory.</td></tr>';
-  }
-}
-
-// -----------------------------------------------------------------------------
-// AI SRE Assistant
-// -----------------------------------------------------------------------------
-async function sendAiMessage() {
-  const text = elements.aiChatInput.value.trim();
-  if (!text) return;
-
-  appendChatMessage('user', text);
-  elements.aiChatInput.value = '';
-  elements.aiChatInput.disabled = true;
-  elements.sendAiChatBtn.disabled = true;
-
-  const loadingId = appendLoadingMessage();
-
-  try {
-    const res = await fetch('/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: text,
-        history: state.chatHistory,
-        include_system_context: true
-      })
-    });
-
-    if (!res.ok) {
-      throw new Error(`HTTP Error ${res.status}: Server returned an invalid response.`);
-    }
-
-    const data = await res.json();
-    removeMessageById(loadingId);
-
-    const replyContent = data.reply || 'No response returned from the assistant.';
-    appendChatMessage('assistant', replyContent);
-
-    state.chatHistory.push({ role: 'user', content: text });
-    state.chatHistory.push({ role: 'assistant', content: replyContent });
-
-  } catch (err) {
-    console.error('Chat error:', err);
-    removeMessageById(loadingId);
-    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI model. Please verify your backend server and Ollama instance are running.');
-  } finally {
-    elements.aiChatInput.disabled = false;
-    elements.sendAiChatBtn.disabled = false;
-    elements.aiChatInput.focus();
-  }
-}
-
-function appendChatMessage(role, content) {
-  const msgDiv = document.createElement('div');
-  msgDiv.className = `chat-message ${role}`;
-  msgDiv.innerHTML = `
-    <div class="message-avatar">
-      <i data-lucide="${role === 'assistant' ? 'bot' : 'user'}"></i>
-    </div>
-    <div class="message-content">${formatMarkdown(content)}</div>
-  `;
-  elements.aiChatMessages.appendChild(msgDiv);
-  elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
-  initLucide();
-}
-
-function appendLoadingMessage() {
-  const id = 'loading-' + Date.now();
-  const msgDiv = document.createElement('div');
-  msgDiv.id = id;
-  msgDiv.className = 'chat-message assistant';
-  msgDiv.innerHTML = `
-    <div class="message-avatar"><i data-lucide="bot"></i></div>
-    <div class="message-content" style="color:var(--text-muted);">
-      <em>Analyzing telemetry and formulating runbook...</em>
-    </div>
-  `;
-  elements.aiChatMessages.appendChild(msgDiv);
-  elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
-  initLucide();
-  return id;
-}
-
-function removeMessageById(id) {
-  const el = document.getElementById(id);
-  if (el) el.remove();
-}
-
-window.sendPromptToAi = function(promptText) {
-  if (elements.aiAssistantPanel) {
-    elements.aiAssistantPanel.classList.add('open');
-  }
-  if (elements.aiChatInput) {
-    elements.aiChatInput.value = promptText;
-  }
-  sendAiMessage();
-};
-
-function formatMarkdown(text) {
-  if (!text) return '';
-  return text
-    .replace(/```bash([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
-    .replace(/```json([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
-    .replace(/```([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
-    .replace(/^#### (.*$)/gim, '<h5 style="color:var(--accent-cyan);margin:8px 0 4px 0;font-size:0.86rem;">$1</h5>')
-    .replace(/^### (.*$)/gim, '<h4 style="color:#fff;margin:10px 0 6px 0;font-size:0.95rem;font-weight:700;">$1</h4>')
-    .replace(/^## (.*$)/gim, '<h3 style="color:#fff;margin:12px 0 6px 0;font-size:1.05rem;font-weight:700;">$1</h3>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/^\s*-\s+(.*$)/gim, '<li style="margin-left:14px;list-style-type:disc;">$1</li>')
-    .replace(/\n/g, '<br>');
-}
-
-// -----------------------------------------------------------------------------
-// CloudWatch Fleet Metrics
-// -----------------------------------------------------------------------------
-async function fetchCloudWatchFleetMetrics() {
-  if (!state.isAuthenticated) return;
-  try {
-    const res = await fetch('/api/cloudwatch/ec2-metrics');
-    if (!res.ok) return;
-    const data = await res.json();
-
-    const cpuEl = document.getElementById('cwLatestCpu');
-    const badgeEl = document.getElementById('cwSourceBadge');
-    
-    if (cpuEl) cpuEl.textContent = `${data.latest_cpu_percent}%`;
-    if (badgeEl) {
-      badgeEl.textContent = data.source === 'aws-cloudwatch' ? 'AWS Live (1h)' : 'Simulated (1h)';
-      badgeEl.style.color = data.source === 'aws-cloudwatch' ? 'var(--accent-emerald)' : 'var(--accent-amber)';
-    }
-
-    const canvas = document.getElementById('cwMetricChart');
-    if (!canvas || !data.history || data.history.length === 0) return;
-
-    const ctx = canvas.getContext('2d');
-    const points = data.history.map(d => d.average);
-    const width = canvas.width;
-    const height = canvas.height;
-
-    ctx.clearRect(0, 0, width, height);
-
-    ctx.beginPath();
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 2;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    const step = width / (points.length - 1 || 1);
-    const maxVal = Math.max(...points, 100);
-
-    points.forEach((val, i) => {
-      const x = i * step;
-      const y = height - (val / maxVal) * (height - 10) - 5;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-
-    ctx.lineTo(width, height);
-    ctx.lineTo(0, height);
-    ctx.closePath();
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
-    grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-  } catch (err) {
-    console.error('CloudWatch metrics fetch error:', err);
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Incident Audit Timeline
-// -----------------------------------------------------------------------------
-async function fetchIncidents() {
-  if (!state.isAuthenticated) return;
-  try {
-    const res = await fetch('/api/incidents');
-    const data = await res.json();
-    const timeline = document.getElementById('incidentTimeline');
-    const pill = document.getElementById('incidentCountPill');
-    if (!timeline) return;
-
-    if (pill) pill.textContent = `${data.incidents.length} Records`;
-    timeline.innerHTML = '';
-
-    if (!data.incidents || data.incidents.length === 0) {
-      timeline.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">No incidents logged.</p>';
-      return;
-    }
-
-    data.incidents.forEach(inc => {
-      const el = document.createElement('div');
-      el.style.cssText = 'border-bottom:1px solid rgba(255,255,255,0.06); padding:8px 0; font-size:0.8rem;';
-      el.innerHTML = `
-        <div style="display:flex; justify-content:space-between;">
-          <strong style="color:var(--accent-emerald);">⚡ Action: ${inc.action} (${inc.target})</strong>
-          <span style="color:var(--text-muted);">${inc.end_time}</span>
-        </div>
-        <div style="color:var(--text-secondary); margin-top:2px;">${inc.details}</div>
-        <div style="color:var(--accent-cyan); font-size:0.75rem; margin-top:2px;">Post-Health Score: ${inc.health_post_action}/100</div>
-      `;
-      timeline.appendChild(el);
-    });
-  } catch (err) {
-    console.error('Fetch incidents error:', err);
-  }
-}
 
 // -----------------------------------------------------------------------------
 // Application Initialization
