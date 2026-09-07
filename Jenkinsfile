@@ -66,10 +66,10 @@ pipeline {
                     echo "Waiting 5 seconds for socket and container initialization..."
                     sleep 5
 
-                    echo "Checking container health status..."
+                    echo "Checking container health status via /metrics..."
                     ATTEMPTS=0
                     MAX_ATTEMPTS=35
-                    HEALTH_URL="http://localhost:${HOST_PORT}/health"
+                    HEALTH_URL="http://localhost:${HOST_PORT}/metrics"
 
                     until curl -s -o /dev/null -w "%{http_code}" ${HEALTH_URL} | grep -q "200"; do
                         ATTEMPTS=$((ATTEMPTS+1))
@@ -82,7 +82,7 @@ pipeline {
                     done
 
                     echo "Application is Healthy!"
-                    curl -s ${HEALTH_URL}
+                    curl -s ${HEALTH_URL} | head -c 100
                 '''
             }
         }
