@@ -68,10 +68,10 @@ pipeline {
 
                     echo "Checking container health status..."
                     ATTEMPTS=0
-                    MAX_ATTEMPTS=30
-                    HEALTH_URL="http://127.0.0.1:${HOST_PORT}/health"
+                    MAX_ATTEMPTS=35
+                    HEALTH_URL="http://localhost:${HOST_PORT}/health"
 
-                    until curl -s -f ${HEALTH_URL} > /dev/null; do
+                    until curl -s -o /dev/null -w "%{http_code}" ${HEALTH_URL} | grep -q "200"; do
                         ATTEMPTS=$((ATTEMPTS+1))
                         if [ ${ATTEMPTS} -ge ${MAX_ATTEMPTS} ]; then
                             echo "Health check failed after ${MAX_ATTEMPTS} attempts."
