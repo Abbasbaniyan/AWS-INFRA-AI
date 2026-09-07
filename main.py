@@ -758,7 +758,7 @@ def get_resources(resource_type: str):
     return {"status": "success", "total": len(items), "items": items}
 
 # -----------------------------------------------------------------------------
-# Live Context Collector for Infrastructure-Aware Mode (Including AWS VPCs/EC2)
+# Live Context Collector for Infrastructure-Aware Mode
 # -----------------------------------------------------------------------------
 def get_live_infrastructure_context() -> dict:
     try:
@@ -825,7 +825,7 @@ async def chat(request: ChatRequest):
             "You MUST base your answer strictly and explicitly on this ACTUAL live application state data retrieved from the system APIs:\n"
             f"{json.dumps(infra_context, separators=(',', ':'))}\n"
             "RULES:\n"
-            "- Answer using the exact resource IDs, service names, ports, and states provided in the context above.\n"
+            "- Answer using the exact resource IDs (e.g., VPC IDs, Instance IDs), service names, ports, and states provided in the context above.\n"
             "- Do NOT tell the user to run shell commands like ps, top, htop, or check hosting panels manually. The data is already provided above.\n"
             "- Keep answers direct, accurate, and concise."
         )
@@ -891,9 +891,9 @@ async def chat(request: ChatRequest):
 def classify_chat_intent(prompt: str) -> Dict[str, Any]:
     p_lower = prompt.lower()
     infra_keywords = [
-        "aws", "ec2", "s3", "vpc", "server", "deploy", "jenkins", "docker", 
+        "aws", "ec2", "s3", "vpc", "iam", "server", "deploy", "jenkins", "docker", 
         "nginx", "ollama", "cpu", "memory", "disk", "metric", "log", "health", 
-        "sre", "cluster", "node", "simulation", "what-if", "restart", "status", "anomaly", "service"
+        "sre", "cluster", "node", "simulation", "what-if", "restart", "status", "anomaly", "service", "website"
     ]
     
     is_infra = any(keyword in p_lower for keyword in infra_keywords)
