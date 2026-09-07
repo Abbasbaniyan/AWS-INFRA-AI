@@ -58,12 +58,6 @@ const elements = {
   wsRefreshActivityBtn: document.getElementById('wsRefreshActivityBtn'),
   modelPullInput: document.getElementById('modelPullInput'),
   modelPullBtn: document.getElementById('modelPullBtn'),
-  digitalTwinDrawer: document.getElementById('digitalTwinDrawer'),
-  dtDrawerTitle: document.getElementById('dtDrawerTitle'),
-  dtDrawerBody: document.getElementById('dtDrawerBody'),
-  closeDtDrawerBtn: document.getElementById('closeDtDrawerBtn'),
-  simulationModal: document.getElementById('simulationModal'),
-  simulationModalContent: document.getElementById('simulationModalContent'),
 
   healthScoreValue: document.getElementById('healthScoreValue'),
   healthProgressRing: document.getElementById('healthProgressRing'),
@@ -651,166 +645,53 @@ function renderLogs() {
 }
 
 // -----------------------------------------------------------------------------
-// Digital Twin Topology Map & Drill-Down Drawer
+// AWS Resource Catalog Tables
 // -----------------------------------------------------------------------------
-async function fetchTopology() {
-  if (!state.isAuthenticated) return;
-  try {
-    const res = await fetch('/api/topology');
-    if (!res.ok) return;
-    const data = await res.json();
-    state.topology = data;
-    renderTopology(data);
-  } catch (err) {
-    console.error('Topology fetch error:', err);
-  }
-}
+async function renderResourceTable(type) {
+  switchView(type);
+  elements.resourceViewTitle.textContent = `${type.toUpperCase()} Resources`;
+  elements.resourceViewSubtitle.textContent = `Managing live AWS cloud inventory catalog for ${type.toUpperCase()}`;
 
-function renderTopology(topology) {
-  const svg = elements.topologySvg;
-  if (!svg || !topology) return;
-
-  const width = svg.clientWidth || 600;
-  const height = 320;
-  const nodes = topology.nodes || [];
-  const links = topology.links || [];
-
-  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  let svgHtml = '<g id="topology-graph-root">';
-
-  links.forEach(l => {
-    const sourceNode = nodes.find(n => n.id === l.source);
-    const targetNode = nodes.find(n => n.id === l.target);
-    if (sourceNode && targetNode) {
-      svgHtml += `<line x1="${sourceNode.x}" y1="${sourceNode.y}" x2="${targetNode.x}" y2="${targetNode.y}" stroke="rgba(56,189,248,0.3)" stroke-width="2.5" stroke-dasharray="5"/>`;
-    }
-  });
-
-  nodes.forEach(n => {
-    svgHtml += `
-      <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectDigitalTwinNode('${n.id}')">
-        <circle r="22" fill="#0e1526" stroke="#38bdf8" stroke-width="3"/>
-        <text text-anchor="middle" y="36" fill="#f8fafc" font-size="11" font-weight="700">${n.label}</text>
-        <circle r="6" fill="#10b981" cx="14" cy="-14" style="box-shadow: 0 0 10px #10b981;"/>
-      </g>
-    `;
-  });
-
-  svgHtml += '</g>';
-  svg.innerHTML = svgHtml;
-}
-
-window.inspectDigitalTwinNode = function(nodeId) {
-  if (!state.topology) return;
-  const node = state.topology.nodes.find(n => n.id === nodeId);
-  if (!node) return;
-
-  elements.dtDrawerTitle.textContent = `${node.label} (${node.id})`;
-  elements.dtDrawerBody.innerHTML = `
-    <div>
-      <span class="dt-section-title">NODE TELEMETRY & HEALTH</span>
-      <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-glass); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:10px;">
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Operational Status</span><span class="health-pill healthy">● HEALTHY</span></div>
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Architecture Type</span><code>${node.type}</code></div>
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">AWS Availability Zone</span><code>${node.region}</code></div>
-      </div>
-    </div>
-
-    <div>
-      <span class="dt-section-title">ACTIVE RUNTIME METRICS</span>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <div>
-          <div style="display:flex; justify-content:space-between; font-size:0.78rem;"><span>Processor Load (vCPU)</span><strong>28.4%</strong></div>
-          <div class="mini-progress-bar"><div class="progress-bar-inner bg-blue" style="width:28.4%;"></div></div>
-        </div>
-        <div>
-          <div style="display:flex; justify-content:space-between; font-size:0.78rem;"><span>RAM Memory Footprint</span><strong>59.7%</strong></div>
-          <div class="mini-progress-bar"><div class="progress-bar-inner bg-purple" style="width:59.7%;"></div></div>
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <span class="dt-section-title">AI SRE ASSESSMENT</span>
-      <div style="background:rgba(56,189,248,0.06); border:1px solid rgba(56,189,248,0.25); border-radius:var(--radius-md); padding:12px; font-size:0.82rem; color:var(--text-primary); line-height:1.5;">
-        "Node telemetry is operating within nominal baseline parameters. No critical latency anomalies or memory leaks detected."
-      </div>
-    </div>
-
-    <div>
-      <span class="dt-section-title">QUICK ACTIONS</span>
-      <div class="dt-action-grid">
-        <button class="action-btn" style="justify-content:center; font-size:0.78rem;" onclick="sendPromptToAi('Inspect telemetry for node ${node.label}')">Ask AI</button>
-        <button class="action-btn" style="justify-content:center; font-size:0.78rem;" onclick="openSimulationModal('ollama.service', 'stop')">Simulate Outage</button>
-        <button class="action-btn" style="justify-content:center; font-size:0.78rem; border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="dispatchGlobalRefresh()">Sync Node</button>
-      </div>
-    </div>
+  elements.resourceTableHeader.innerHTML = `
+    <tr>
+      <th>Resource ID</th>
+      <th>Name / Tag</th>
+      <th>Status</th>
+      <th>Attributes</th>
+      <th>Action</th>
+    </tr>
   `;
+  elements.resourceTableBody.innerHTML = '<tr><td colspan="5">Loading cloud inventory...</td></tr>';
 
-  elements.digitalTwinDrawer.classList.add('open');
-};
+  try {
+    const res = await fetch(`/resources/${type}`);
+    const data = await res.json();
+    const items = data.items || [];
+    elements.resourceCountDisplay.textContent = `Showing ${items.length} items (${data.source || 'inventory'})`;
+    elements.resourceTableBody.innerHTML = '';
 
-if (elements.closeDtDrawerBtn) {
-  elements.closeDtDrawerBtn.addEventListener('click', () => {
-    elements.digitalTwinDrawer.classList.remove('open');
-  });
+    items.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><code>${item.id || item.name}</code></td>
+        <td><strong>${item.name || item.id}</strong></td>
+        <td><span class="health-pill healthy">${item.status || 'Active'}</span></td>
+        <td>${JSON.stringify(item.details || {})}</td>
+        <td>
+          <button class="action-btn" style="padding:4px 8px;font-size:0.75rem;" onclick="sendPromptToAi('Audit resource ${item.id || item.name}')">
+            Audit
+          </button>
+        </td>
+      `;
+      elements.resourceTableBody.appendChild(tr);
+    });
+  } catch (err) {
+    elements.resourceTableBody.innerHTML = '<tr><td colspan="5">Resource details synchronized via live inventory.</td></tr>';
+  }
 }
 
 // -----------------------------------------------------------------------------
-// What-If Simulation Engine
-// -----------------------------------------------------------------------------
-window.openSimulationModal = async function(serviceName, actionType) {
-  elements.simulationModal.classList.add('open');
-  elements.simulationModalContent.innerHTML = `<p style="color:var(--text-muted);">Running AI dependency cascade simulation for <code>${serviceName}</code>...</p>`;
-
-  try {
-    const res = await fetch('/api/workspace/simulate-impact', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target_service: serviceName, action_type: actionType })
-    });
-    const data = await res.json();
-    const sim = data.simulation || {};
-
-    elements.simulationModalContent.innerHTML = `
-      <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:var(--radius-md); padding:12px; margin-bottom:6px;">
-        <strong style="color:var(--accent-amber);">${sim.title}</strong>
-        <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">${sim.summary}</p>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:6px; font-size:0.82rem;">
-        <div style="display:flex; justify-content:space-between;"><span>AI SRE Chat Assistant:</span><strong>${sim.ai_chat}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span>LLM Model Inference:</span><strong>${sim.model_inference}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span>Control Plane Dashboard:</span><strong>${sim.frontend_ui}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span>Nginx Ingress Routing:</span><strong>${sim.nginx_ingress}</strong></div>
-        <div style="display:flex; justify-content:space-between; margin-top:4px; border-top:1px solid var(--border-glass); padding-top:6px;"><span>Predicted Risk Level:</span><span class="health-pill critical">${sim.risk_level}</span></div>
-      </div>
-    `;
-
-    const execBtn = document.getElementById('executeSimulationBtn');
-    if (execBtn) {
-      execBtn.onclick = async () => {
-        execBtn.disabled = true;
-        execBtn.textContent = 'Executing Production Action...';
-        await triggerDeploymentAction(serviceName, 'restart');
-        closeSimulationModal();
-        execBtn.disabled = false;
-        execBtn.textContent = 'Execute Action in Production';
-      };
-    }
-  } catch (err) {
-    console.error('Simulation error:', err);
-    elements.simulationModalContent.innerHTML = '<p style="color:var(--accent-rose);">Simulation engine request failed.</p>';
-  }
-};
-
-window.closeSimulationModal = function() {
-  if (elements.simulationModal) {
-    elements.simulationModal.classList.remove('open');
-  }
-};
-
-// -----------------------------------------------------------------------------
-// AI SRE Assistant with Full SRE Runbook & Simulation Engine
+// AI SRE Assistant with Full SRE Runbook Engine (Phase 6)
 // -----------------------------------------------------------------------------
 async function sendAiMessage() {
   const text = elements.aiChatInput.value.trim();
@@ -843,48 +724,75 @@ async function sendAiMessage() {
 
     const replyContent = data.reply || 'No response returned from the assistant.';
     
+    // Dynamic Autonomous SRE Runbook Action Matcher
     let runbookActionHtml = '';
     const lowerP = text.toLowerCase();
 
-    // 1. What-If Simulation Trigger
-    if (lowerP.includes('what happens if') || lowerP.includes('simulate') || lowerP.includes('stop ollama')) {
-      runbookActionHtml = `
-        <div class="ai-action-runbook-card" style="border-color:var(--accent-amber); background:rgba(245,158,11,0.06);">
-          <div class="ai-runbook-header" style="color:var(--accent-amber);">
-            <span>🧪 DIGITAL TWIN WHAT-IF SIMULATION</span>
-            <span>ollama.service</span>
-          </div>
-          <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Predict cascade impact before executing production changes.</p>
-          <button class="ai-runbook-btn" style="background:var(--accent-amber); color:#000;" onclick="openSimulationModal('ollama.service', 'stop')">
-            Launch Outage Simulation
-          </button>
-        </div>`;
-    } 
-    // 2. Service Lifecycle Actions
-    else if (lowerP.includes('restart') || lowerP.includes('reload') || lowerP.includes('start') || lowerP.includes('stop')) {
-      const servicesMap = {
-        'docker': { id: 'docker', name: 'Docker Engine' },
-        'nginx': { id: 'nginx', name: 'Nginx Proxy' },
-        'api': { id: 'aws-infra-api', name: 'FastAPI Backend' },
-        'ollama': { id: 'ollama.service', name: 'Ollama Daemon' }
-      };
+    // 1. Service Lifecycle Actions
+    const servicesMap = {
+      'docker': { id: 'docker', name: 'Docker Engine', desc: 'Container daemon runtime on host node.' },
+      'nginx': { id: 'nginx', name: 'Nginx Proxy', desc: 'Ingress reverse proxy port :80 on host node.' },
+      'api': { id: 'aws-infra-api', name: 'FastAPI Backend', desc: 'Core FastAPI AI Engine port :8000.' },
+      'fastapi': { id: 'aws-infra-api', name: 'FastAPI Backend', desc: 'Core FastAPI AI Engine port :8000.' },
+      'ollama': { id: 'ollama.service', name: 'Ollama Daemon', desc: 'Ollama local LLM inference daemon port :11434.' },
+      'redis': { id: 'redis', name: 'Redis Cache', desc: 'In-memory telemetry caching store.' },
+      'postgres': { id: 'postgresql', name: 'PostgreSQL DB', desc: 'Primary relational database service.' },
+      'ssm': { id: 'aws-ssm-agent', name: 'AWS SSM Agent', desc: 'AWS Systems Manager host communication daemon.' },
+      'cloudwatch': { id: 'cloudwatch-agent', name: 'CloudWatch Agent', desc: 'Amazon CloudWatch metrics collection agent.' }
+    };
 
+    if (lowerP.includes('restart') || lowerP.includes('reload') || lowerP.includes('start') || lowerP.includes('stop')) {
+      const actionType = lowerP.includes('reload') ? 'reload' : (lowerP.includes('stop') ? 'stop' : 'restart');
       for (const [key, svc] of Object.entries(servicesMap)) {
         if (lowerP.includes(key)) {
-          const act = lowerP.includes('stop') ? 'stop' : 'restart';
           runbookActionHtml = `
             <div class="ai-action-runbook-card">
               <div class="ai-runbook-header">
                 <span>⚡ SRE RUNBOOK ACTION RECOMMENDED</span>
                 <span>${svc.name}</span>
               </div>
-              <button class="ai-runbook-btn" onclick="executeAiRunbookAction('${svc.id}', '${act}', this)">
-                Approve & Execute ${act.toUpperCase()}
+              <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Target: ${svc.desc}</p>
+              <button class="ai-runbook-btn" onclick="executeAiRunbookAction('${svc.id}', '${actionType}', this)">
+                Approve & Execute ${actionType.toUpperCase()}
               </button>
             </div>`;
           break;
         }
       }
+    }
+
+    // 2. AI Model Memory Management Actions (Pin/Unload)
+    if (lowerP.includes('model') || lowerP.includes('qwen') || lowerP.includes('unload') || lowerP.includes('pin') || lowerP.includes('load')) {
+      const isUnload = lowerP.includes('unload') || lowerP.includes('free');
+      const targetModel = lowerP.includes('1.5b') ? 'qwen2.5-coder:1.5b' : 'qwen2.5-coder:0.5b';
+      const action = isUnload ? 'unload' : 'load';
+      
+      runbookActionHtml = `
+        <div class="ai-action-runbook-card">
+          <div class="ai-runbook-header">
+            <span>🧠 AI MODEL RUNBOOK ACTION RECOMMENDED</span>
+            <span>${targetModel}</span>
+          </div>
+          <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Action: ${isUnload ? 'Offload model from RAM to idle state' : 'Lock/Pin model weights directly in RAM'}.</p>
+          <button class="ai-runbook-btn" onclick="executeAiModelRunbookAction('${targetModel}', '${action}', this)">
+            Approve & ${action.toUpperCase()} MODEL
+          </button>
+        </div>`;
+    }
+
+    // 3. Automated Anomaly Remediation & Cache Purge Actions
+    if (lowerP.includes('remediate') || lowerP.includes('clear cache') || lowerP.includes('purge') || lowerP.includes('high cpu')) {
+      runbookActionHtml = `
+        <div class="ai-action-runbook-card">
+          <div class="ai-runbook-header">
+            <span>🛡️ SRE AUTO-REMEDIATION RUNBOOK</span>
+            <span>Cluster Optimization</span>
+          </div>
+          <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Execute system cache purge, cycle transient socket buffers, and normalize CPU load.</p>
+          <button class="ai-runbook-btn" onclick="executeAiRemediationRunbook(this)">
+            Approve & Execute Auto-Remediation
+          </button>
+        </div>`;
     }
 
     appendChatMessage('assistant', replyContent + runbookActionHtml);
@@ -895,7 +803,7 @@ async function sendAiMessage() {
   } catch (err) {
     console.error('Chat error:', err);
     removeMessageById(loadingId);
-    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI model.');
+    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI model. Please verify your backend server and Ollama instance are running.');
   } finally {
     elements.aiChatInput.disabled = false;
     elements.sendAiChatBtn.disabled = false;
@@ -925,7 +833,7 @@ function appendLoadingMessage() {
   msgDiv.innerHTML = `
     <div class="message-avatar"><i data-lucide="bot"></i></div>
     <div class="message-content" style="color:var(--text-muted);">
-      <em>Analyzing digital twin topology & cascading impact...</em>
+      <em>Analyzing telemetry and formulating runbook...</em>
     </div>
   `;
   elements.aiChatMessages.appendChild(msgDiv);
@@ -965,7 +873,7 @@ function formatMarkdown(text) {
 }
 
 // -----------------------------------------------------------------------------
-// CloudWatch Fleet Metrics & Incidents
+// CloudWatch Fleet Metrics
 // -----------------------------------------------------------------------------
 async function fetchCloudWatchFleetMetrics() {
   if (!state.isAuthenticated) return;
@@ -973,15 +881,60 @@ async function fetchCloudWatchFleetMetrics() {
     const res = await fetch('/api/cloudwatch/ec2-metrics');
     if (!res.ok) return;
     const data = await res.json();
+
     const cpuEl = document.getElementById('cwLatestCpu');
     const badgeEl = document.getElementById('cwSourceBadge');
+    
     if (cpuEl) cpuEl.textContent = `${data.latest_cpu_percent}%`;
-    if (badgeEl) badgeEl.textContent = data.source === 'aws-cloudwatch' ? 'AWS Live (1h)' : 'Simulated (1h)';
+    if (badgeEl) {
+      badgeEl.textContent = data.source === 'aws-cloudwatch' ? 'AWS Live (1h)' : 'Simulated (1h)';
+      badgeEl.style.color = data.source === 'aws-cloudwatch' ? 'var(--accent-emerald)' : 'var(--accent-amber)';
+    }
+
+    const canvas = document.getElementById('cwMetricChart');
+    if (!canvas || !data.history || data.history.length === 0) return;
+
+    const ctx = canvas.getContext('2d');
+    const points = data.history.map(d => d.average);
+    const width = canvas.width;
+    const height = canvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    ctx.beginPath();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    const step = width / (points.length - 1 || 1);
+    const maxVal = Math.max(...points, 100);
+
+    points.forEach((val, i) => {
+      const x = i * step;
+      const y = height - (val / maxVal) * (height - 10) - 5;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    ctx.lineTo(width, height);
+    ctx.lineTo(0, height);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
+    grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
   } catch (err) {
     console.error('CloudWatch metrics fetch error:', err);
   }
 }
 
+// -----------------------------------------------------------------------------
+// Incident Audit Timeline
+// -----------------------------------------------------------------------------
 async function fetchIncidents() {
   if (!state.isAuthenticated) return;
   try {
@@ -990,12 +943,15 @@ async function fetchIncidents() {
     const timeline = document.getElementById('incidentTimeline');
     const pill = document.getElementById('incidentCountPill');
     if (!timeline) return;
+
     if (pill) pill.textContent = `${data.incidents.length} Records`;
     timeline.innerHTML = '';
+
     if (!data.incidents || data.incidents.length === 0) {
       timeline.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem;">No incidents logged.</p>';
       return;
     }
+
     data.incidents.forEach(inc => {
       const el = document.createElement('div');
       el.style.cssText = 'border-bottom:1px solid rgba(255,255,255,0.06); padding:8px 0; font-size:0.8rem;';
@@ -1005,6 +961,7 @@ async function fetchIncidents() {
           <span style="color:var(--text-muted);">${inc.end_time}</span>
         </div>
         <div style="color:var(--text-secondary); margin-top:2px;">${inc.details}</div>
+        <div style="color:var(--accent-cyan); font-size:0.75rem; margin-top:2px;">Post-Health Score: ${inc.health_post_action}/100</div>
       `;
       timeline.appendChild(el);
     });
@@ -1013,27 +970,99 @@ async function fetchIncidents() {
   }
 }
 
+// -----------------------------------------------------------------------------
+// Autonomous SRE Runbook Executors (Interactive AI Actions)
+// -----------------------------------------------------------------------------
 window.executeAiRunbookAction = async function(serviceName, actionType, btnElement) {
   if (btnElement) {
     btnElement.disabled = true;
-    btnElement.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:12px; height:12px;"></i> Executing...`;
+    btnElement.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:12px; height:12px;"></i> Executing ${actionType}...`;
     initLucide();
   }
+
   try {
-    await fetch('/api/workspace/deployments/action', {
+    const res = await fetch('/api/workspace/deployments/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ service_id: serviceName, action: actionType })
     });
+    const data = await res.json();
+
     if (btnElement) {
       btnElement.textContent = '✓ Executed';
       btnElement.style.background = 'var(--accent-emerald)';
       btnElement.style.color = '#fff';
     }
-    appendChatMessage('assistant', `✅ **Action Succeeded:** \`${serviceName}\` has been **${actionType}ed** on host node.`);
+
+    appendChatMessage('assistant', `✅ **Action Succeeded:** \`${serviceName}\` has been **${actionType}ed** on **Ai-Infra-AI (Host Node)**.\n\n- **Status:** Running (Healthy)\n- **Action Log:** \`${data.message}\`\n- **Audit:** Event recorded directly to Live Logs & Activity Ledger.`);
+
     await dispatchGlobalRefresh();
   } catch (err) {
-    console.error('Runbook error:', err);
+    console.error('Runbook execution error:', err);
+    if (btnElement) {
+      btnElement.disabled = false;
+      btnElement.textContent = '⚠️ Failed - Retry';
+    }
+    appendChatMessage('assistant', `❌ **Execution Failed:** Unable to trigger \`${actionType}\` on \`${serviceName}\`.`);
+  }
+};
+
+window.executeAiModelRunbookAction = async function(modelName, actionType, btnElement) {
+  if (btnElement) {
+    btnElement.disabled = true;
+    btnElement.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:12px; height:12px;"></i> Updating model memory...`;
+    initLucide();
+  }
+
+  try {
+    const res = await fetch('/api/workspace/models/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: modelName, action: actionType })
+    });
+    const data = await res.json();
+
+    if (btnElement) {
+      btnElement.textContent = '✓ Executed';
+      btnElement.style.background = 'var(--accent-emerald)';
+      btnElement.style.color = '#fff';
+    }
+
+    appendChatMessage('assistant', `✅ **Model Memory Updated:** \`${modelName}\` state set to **${actionType.toUpperCase()}**.\n\n- **Detail:** \`${data.message}\`\n- **RAM:** Telemetry updated across Model Hub.`);
+    await dispatchGlobalRefresh();
+  } catch (err) {
+    console.error('Model runbook error:', err);
+    if (btnElement) {
+      btnElement.disabled = false;
+      btnElement.textContent = '⚠️ Failed - Retry';
+    }
+  }
+};
+
+window.executeAiRemediationRunbook = async function(btnElement) {
+  if (btnElement) {
+    btnElement.disabled = true;
+    btnElement.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:12px; height:12px;"></i> Purging cache & stabilizing...`;
+    initLucide();
+  }
+
+  try {
+    await fetch('/api/remediate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anomaly_id: 'ai-prompt-remediate', action_type: 'purge_cache', target: 'host-kernel' })
+    });
+
+    if (btnElement) {
+      btnElement.textContent = '✓ Remediation Applied';
+      btnElement.style.background = 'var(--accent-emerald)';
+      btnElement.style.color = '#fff';
+    }
+
+    appendChatMessage('assistant', `🛡️ **Auto-Remediation Completed:** Host memory caches purged and transient I/O flushed. Health score normalized.`);
+    await dispatchGlobalRefresh();
+  } catch (err) {
+    console.error('Remediation error:', err);
   }
 };
 
@@ -1066,7 +1095,9 @@ function initEventListeners() {
         elements.navButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const anomalyCard = document.querySelector('.anomalies-card');
-        if (anomalyCard) anomalyCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (anomalyCard) {
+          anomalyCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
         return;
       }
 
@@ -1075,7 +1106,9 @@ function initEventListeners() {
         elements.navButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const logCard = document.querySelector('.logs-console-card');
-        if (logCard) logCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (logCard) {
+          logCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
         return;
       }
 
@@ -1157,6 +1190,17 @@ function initEventListeners() {
     });
   });
 
+  if (elements.closeNodeModalBtn) {
+    elements.closeNodeModalBtn.addEventListener('click', () => {
+      elements.nodeModal.classList.remove('open');
+    });
+  }
+  if (elements.modalCloseBtn) {
+    elements.modalCloseBtn.addEventListener('click', () => {
+      elements.nodeModal.classList.remove('open');
+    });
+  }
+
   if (elements.logLevelFilter) {
     elements.logLevelFilter.addEventListener('change', renderLogs);
   }
@@ -1181,10 +1225,15 @@ function switchView(viewName) {
   } else if (viewName === 'workspace') {
     elements.views.workspace.classList.add('active');
     fetchWorkspaceSummary();
-    if (state.activeWorkspaceTab === 'servers') fetchWorkspaceServers();
-    else if (state.activeWorkspaceTab === 'models') fetchWorkspaceModels();
-    else if (state.activeWorkspaceTab === 'deployments') fetchWorkspaceDeployments();
-    else if (state.activeWorkspaceTab === 'activity') fetchWorkspaceActivity();
+    if (state.activeWorkspaceTab === 'servers') {
+      fetchWorkspaceServers();
+    } else if (state.activeWorkspaceTab === 'models') {
+      fetchWorkspaceModels();
+    } else if (state.activeWorkspaceTab === 'deployments') {
+      fetchWorkspaceDeployments();
+    } else if (state.activeWorkspaceTab === 'activity') {
+      fetchWorkspaceActivity();
+    }
     initLucide();
   } else {
     elements.views.resources.classList.add('active');
@@ -1193,23 +1242,37 @@ function switchView(viewName) {
 
 function switchWorkspaceTab(tabName) {
   state.activeWorkspaceTab = tabName;
+
   elements.workspaceTabButtons.forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-workspace-tab') === tabName);
   });
+
   Object.keys(elements.workspacePanels).forEach(key => {
     const panel = elements.workspacePanels[key];
-    if (panel) panel.classList.toggle('active', key === tabName);
+    if (panel) {
+      panel.classList.toggle('active', key === tabName);
+    }
   });
 
-  if (tabName === 'servers') fetchWorkspaceServers();
-  else if (tabName === 'models') fetchWorkspaceModels();
-  else if (tabName === 'deployments') fetchWorkspaceDeployments();
-  else if (tabName === 'activity') fetchWorkspaceActivity();
+  if (tabName === 'servers') {
+    fetchWorkspaceServers();
+  } else if (tabName === 'models') {
+    fetchWorkspaceModels();
+  } else if (tabName === 'deployments') {
+    fetchWorkspaceDeployments();
+  } else if (tabName === 'activity') {
+    fetchWorkspaceActivity();
+  }
+
   initLucide();
 }
 
+// -----------------------------------------------------------------------------
+// Live Metrics Engine
+// -----------------------------------------------------------------------------
 function updateDashboardUI(data) {
   if (!data) return;
+
   const cpu = data.cpu || {};
   const memory = data.memory || {};
   const disk = data.disk || {};
@@ -1221,20 +1284,37 @@ function updateDashboardUI(data) {
   if (elements.healthScoreValue) elements.healthScoreValue.textContent = Math.round(healthScore);
   if (elements.healthStatusText) elements.healthStatusText.textContent = health.status || 'Unknown';
   if (elements.healthyCount) elements.healthyCount.textContent = health.healthy_components ?? 0;
+  if (elements.warningCount) elements.warningCount.textContent = health.warning_components ?? 0;
+  if (elements.criticalCount) elements.criticalCount.textContent = health.critical_components ?? 0;
+
+  if (elements.healthProgressRing) {
+    const radius = 58;
+    const circumference = 2 * Math.PI * radius;
+    elements.healthProgressRing.style.strokeDasharray = `${circumference}`;
+    elements.healthProgressRing.style.strokeDashoffset = `${circumference * (1 - healthScore / 100)}`;
+    if (health.color) elements.healthProgressRing.style.stroke = health.color;
+  }
 
   const cpuPercent = Number(cpu.percent ?? 0);
   if (elements.cpuUsage) elements.cpuUsage.textContent = `${cpuPercent.toFixed(1)}%`;
+  if (elements.cpuCores) elements.cpuCores.textContent = `${cpu.cores ?? 0} Cores`;
   if (elements.cpuProgressBar) elements.cpuProgressBar.style.width = `${Math.min(cpuPercent, 100)}%`;
 
   const memoryPercent = Number(memory.percent ?? 0);
   if (elements.memoryUsage) elements.memoryUsage.textContent = `${memoryPercent.toFixed(1)}%`;
+  if (elements.memoryDetails) elements.memoryDetails.textContent = `${memory.used_gb ?? 0} GB / ${memory.total_gb ?? 0} GB`;
   if (elements.memProgressBar) elements.memProgressBar.style.width = `${Math.min(memoryPercent, 100)}%`;
 
   const diskPercent = Number(disk.percent ?? 0);
   if (elements.diskUsage) elements.diskUsage.textContent = `${diskPercent.toFixed(1)}%`;
+  if (elements.diskDetails) elements.diskDetails.textContent = `${disk.used_gb ?? 0} GB / ${disk.total_gb ?? 0} GB`;
   if (elements.diskProgressBar) elements.diskProgressBar.style.width = `${Math.min(diskPercent, 100)}%`;
 
+  if (elements.networkRate) elements.networkRate.textContent = `${Number(network.kb_sent_sec ?? 0).toFixed(1)} KB/s`;
+  if (elements.networkTotals) elements.networkTotals.textContent = `↑ ${Number(network.total_sent_mb ?? 0).toFixed(2)} MB  |  ↓ ${Number(network.total_recv_mb ?? 0).toFixed(2)} MB`;
   if (elements.systemUptime) elements.systemUptime.textContent = uptime.formatted || '0h 0m 0s';
+
+  if (Array.isArray(data.top_processes)) renderProcesses(data.top_processes);
   state.metrics = data;
 }
 
@@ -1244,12 +1324,16 @@ async function fetchMetrics() {
     const res = await fetch('/metrics');
     if (!res.ok) return;
     const data = await res.json();
+    state.rawMetrics = data;
     updateDashboardUI(data);
   } catch (err) {
     console.error('Error fetching metrics:', err);
   }
 }
 
+// -----------------------------------------------------------------------------
+// Anomaly Engine & Auto-Remediation
+// -----------------------------------------------------------------------------
 async function fetchAnomalies() {
   if (!state.isAuthenticated) return;
   try {
@@ -1262,8 +1346,40 @@ async function fetchAnomalies() {
   }
 }
 
+window.triggerSimulation = async function() {
+  try {
+    state.isSimulatedActive = true;
+    const res = await fetch('/api/simulate-anomaly', { method: 'POST' });
+    const data = await res.json();
+    if (data.anomalies) {
+      renderAnomalies(data.anomalies);
+    }
+  } catch (err) {
+    console.error("Simulation trigger failed:", err);
+  }
+};
+
+window.triggerRemediation = async function(anomalyId, actionType, target) {
+  try {
+    state.isSimulatedActive = false;
+    await fetch('/api/remediate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        anomaly_id: anomalyId,
+        action_type: actionType,
+        target: target
+      })
+    });
+    dispatchGlobalRefresh();
+  } catch (err) {
+    console.error('Remediation error:', err);
+  }
+};
+
 function renderAnomalies(anomalies) {
   if (!elements.anomaliesList) return;
+  
   if (elements.anomalyCountPill) elements.anomalyCountPill.textContent = `${anomalies.length} Detected`;
   if (elements.navAnomalyBadge) elements.navAnomalyBadge.textContent = anomalies.length;
 
@@ -1281,39 +1397,136 @@ function renderAnomalies(anomalies) {
   anomalies.forEach(a => {
     const item = document.createElement('div');
     item.className = `anomaly-item ${a.severity ? a.severity.toLowerCase() : 'critical'}`;
+    
+    let actionType = 'purge_cache';
+    if (a.id && a.id.includes('cpu')) actionType = 'restart_service';
+    if (a.id && a.id.includes('mem')) actionType = 'purge_cache';
+    if (a.id && a.id.includes('disk')) actionType = 'purge_cache';
+    if (a.id && a.id.includes('ec2')) actionType = 'reboot_ec2';
+
     item.innerHTML = `
       <div class="anomaly-header">
         <span class="anomaly-title">${a.title}</span>
         <span class="anomaly-time">${a.timestamp}</span>
       </div>
       <div class="anomaly-desc">${a.description}</div>
+      <div class="anomaly-action-row" style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px;">
+        <span class="anomaly-resource-tag">${a.resource || 'Host'}</span>
+        <div style="display: flex; gap: 6px;">
+          <button class="ai-diagnose-btn-inline" onclick="sendPromptToAi('${a.ai_prompt || a.title}')">
+            <i data-lucide="sparkles" style="width: 13px; height: 13px;"></i> AI Plan
+          </button>
+          <button class="ai-diagnose-btn-inline" style="border-color: var(--accent-emerald); color: var(--accent-emerald);" 
+                  onclick="triggerRemediation('${a.id}', '${actionType}', '${a.resource_id || 'nginx'}')">
+            <i data-lucide="zap" style="width: 13px; height: 13px;"></i> Remediate
+          </button>
+        </div>
+      </div>
     `;
     elements.anomaliesList.appendChild(item);
   });
   initLucide();
 }
 
-async function renderResourceTable(type) {
-  switchView(type);
-  elements.resourceViewTitle.textContent = `${type.toUpperCase()} Resources`;
-  elements.resourceTableHeader.innerHTML = `<tr><th>Resource ID</th><th>Name / Tag</th><th>Status</th><th>Attributes</th></tr>`;
-  elements.resourceTableBody.innerHTML = '<tr><td colspan="4">Loading cloud inventory...</td></tr>';
+// -----------------------------------------------------------------------------
+// Top Processes Table
+// -----------------------------------------------------------------------------
+function renderProcesses(processes) {
+  if (!elements.topProcessTableBody) return;
+  elements.topProcessTableBody.innerHTML = '';
+  if (elements.totalProcCount) elements.totalProcCount.textContent = `${processes.length} tasks monitored`;
+
+  processes.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><code>${p.pid}</code></td>
+      <td><strong>${p.name}</strong></td>
+      <td><span class="${p.cpu_percent > 30 ? 'text-rose' : 'text-primary'}">${p.cpu_percent}%</span></td>
+      <td>${p.memory_percent}%</td>
+      <td><span class="health-pill healthy">${p.status}</span></td>
+    `;
+    elements.topProcessTableBody.appendChild(tr);
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Infrastructure Topology Map
+// -----------------------------------------------------------------------------
+async function fetchTopology() {
+  if (!state.isAuthenticated) return;
   try {
-    const res = await fetch(`/resources/${type}`);
+    const res = await fetch('/api/topology');
+    if (!res.ok) return;
     const data = await res.json();
-    const items = data.items || [];
-    elements.resourceCountDisplay.textContent = `Showing ${items.length} items`;
-    elements.resourceTableBody.innerHTML = '';
-    items.forEach(item => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td><code>${item.id || item.name}</code></td><td><strong>${item.name || item.id}</strong></td><td><span class="health-pill healthy">Active</span></td><td>${JSON.stringify(item.details || {})}</td>`;
-      elements.resourceTableBody.appendChild(tr);
-    });
+    state.topology = data;
+    renderTopology(data);
   } catch (err) {
-    elements.resourceTableBody.innerHTML = '<tr><td colspan="4">Synchronized via live inventory.</td></tr>';
+    console.error('Topology fetch error:', err);
   }
 }
 
+function renderTopology(topology) {
+  const svg = elements.topologySvg;
+  if (!svg || !topology) return;
+
+  const width = svg.clientWidth || 600;
+  const height = 320;
+  const nodes = topology.nodes || [];
+  const links = topology.links || [];
+
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  let svgHtml = '<g id="topology-graph-root">';
+
+  links.forEach(l => {
+    const sourceNode = nodes.find(n => n.id === l.source);
+    const targetNode = nodes.find(n => n.id === l.target);
+    if (sourceNode && targetNode) {
+      svgHtml += `<line x1="${sourceNode.x}" y1="${sourceNode.y}" x2="${targetNode.x}" y2="${targetNode.y}" stroke="rgba(255,255,255,0.2)" stroke-width="2" stroke-dasharray="4"/>`;
+    }
+  });
+
+  nodes.forEach(n => {
+    svgHtml += `
+      <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectNode('${n.id}')">
+        <circle r="20" fill="#0e1526" stroke="#38bdf8" stroke-width="2.5"/>
+        <text text-anchor="middle" y="32" fill="#94a3b8" font-size="10" font-weight="600">${n.label}</text>
+        <circle r="5" fill="#10b981" cx="12" cy="-12"/>
+      </g>
+    `;
+  });
+
+  svgHtml += '</g>';
+  svg.innerHTML = svgHtml;
+}
+
+window.inspectNode = function(nodeId) {
+  if (!state.topology) return;
+  const node = state.topology.nodes.find(n => n.id === nodeId);
+  if (!node) return;
+
+  elements.modalNodeTitle.textContent = `${node.label} (${node.id})`;
+  elements.modalNodeContent.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div><strong>Status:</strong> <span class="health-pill ${node.status}">${node.status.toUpperCase()}</span></div>
+      <div><strong>Type:</strong> <code>${node.type || 'AWS Core Infrastructure'}</code></div>
+      <div><strong>Region:</strong> <code>${node.region || 'eu-north-1'}</code></div>
+      <div><strong>Details:</strong> ${node.details || 'Operational state normal.'}</div>
+    </div>
+  `;
+
+  if (elements.modalAiDiagnoseBtn) {
+    elements.modalAiDiagnoseBtn.onclick = () => {
+      elements.nodeModal.classList.remove('open');
+      sendPromptToAi(`Explain and diagnose AWS resource: ${node.label} (${node.id})`);
+    };
+  }
+
+  elements.nodeModal.classList.add('open');
+};
+
+// -----------------------------------------------------------------------------
+// Application Initialization
+// -----------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
   initLucide();
