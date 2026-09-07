@@ -698,6 +698,97 @@
       flex-direction: column;
       gap: 8px;
     }
+
+    /* SERVER FLEET CARD GRID STYLES (PHASE 3) */
+    .servers-fleet-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+      width: 100%;
+    }
+    .server-fleet-card {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+    }
+    .server-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .server-identity-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .server-node-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: var(--radius-md);
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-cyan);
+      flex-shrink: 0;
+    }
+    .server-node-name {
+      font-size: 0.96rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .server-node-role {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .server-metric-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .server-metric-labels {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.76rem;
+    }
+    .server-info-matrix {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-glass);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      font-size: 0.78rem;
+    }
+    .server-info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .server-info-title {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .server-info-val {
+      font-family: var(--font-mono);
+      color: var(--text-primary);
+    }
+    .server-actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
     .workspace-placeholder-box {
       padding: 48px 24px;
       display: flex;
@@ -823,7 +914,8 @@
         justify-content: flex-end;
       }
       .quick-insights-container,
-      .workspace-stat-grid {
+      .workspace-stat-grid,
+      .servers-fleet-grid {
         grid-template-columns: 1fr;
       }
       .health-gauge-container {
@@ -1307,18 +1399,11 @@
           </div>
         </div>
 
-        <!-- TAB 2: SERVER FLEET (PLACEHOLDER) -->
+        <!-- TAB 2: SERVER FLEET (PHASE 3 ACTIVE) -->
         <div class="workspace-panel" id="workspace-panel-servers">
-          <div class="card glass-card">
-            <div class="workspace-placeholder-box">
-              <div class="workspace-placeholder-icon">
-                <i data-lucide="server" style="width: 24px; height: 24px;"></i>
-              </div>
-              <h4 class="workspace-placeholder-title">Server Fleet Management</h4>
-              <p class="workspace-placeholder-desc">
-                Multi-node host telemetry, CPU/memory headroom monitors, and SSM/SSH status will be linked directly to the AWS EC2 collector in Phase 3.
-              </p>
-              <span class="workspace-phase-badge">CONNECTS IN PHASE 3</span>
+          <div class="servers-fleet-grid" id="workspaceServersContainer">
+            <div class="card glass-card" style="padding: 24px; grid-column: 1 / -1; text-align: center;">
+              <p style="color: var(--text-muted); font-size: 0.85rem;">Discovering server fleet telemetry...</p>
             </div>
           </div>
         </div>

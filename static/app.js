@@ -48,6 +48,7 @@ const elements = {
   wsServicesSub: document.getElementById('wsServicesSub'),
   wsHealthIndex: document.getElementById('wsHealthIndex'),
   wsHealthSub: document.getElementById('wsHealthSub'),
+  workspaceServersContainer: document.getElementById('workspaceServersContainer'),
 
   healthScoreValue: document.getElementById('healthScoreValue'),
   healthProgressRing: document.getElementById('healthProgressRing'),
@@ -192,11 +193,13 @@ function startDataPolling() {
   fetchCloudWatchFleetMetrics();
   fetchIncidents();
   fetchWorkspaceSummary();
+  fetchWorkspaceServers();
 
   state.pollTimers.push(setInterval(fetchMetrics, 3000));
   state.pollTimers.push(setInterval(fetchAnomalies, 4000));
   state.pollTimers.push(setInterval(fetchLogs, 5000));
   state.pollTimers.push(setInterval(fetchWorkspaceSummary, 6000));
+  state.pollTimers.push(setInterval(fetchWorkspaceServers, 10000));
   state.pollTimers.push(setInterval(fetchCloudWatchFleetMetrics, 30000));
 }
 
@@ -206,7 +209,7 @@ function stopDataPolling() {
 }
 
 // -----------------------------------------------------------------------------
-// WORKSPACE PHASE 2: Live Summary Aggregator
+// WORKSPACE: Live Summary & Server Fleet Handlers
 // -----------------------------------------------------------------------------
 async function fetchWorkspaceSummary() {
   if (!state.isAuthenticated) return;
@@ -255,6 +258,104 @@ function updateWorkspaceSummaryUI(data) {
   if (elements.wsHealthSub && health.subtitle) {
     elements.wsHealthSub.textContent = health.subtitle;
   }
+}
+
+async function fetchWorkspaceServers() {
+  if (!state.isAuthenticated) return;
+  try {
+    const res = await fetch('/api/workspace/servers');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderWorkspaceServersUI(data.servers || []);
+  } catch (err) {
+    console.error('Workspace servers fetch error:', err);
+  }
+}
+
+function renderWorkspaceServersUI(servers) {
+  if (!elements.workspaceServersContainer) return;
+  elements.workspaceServersContainer.innerHTML = '';
+
+  if (servers.length === 0) {
+    elements.workspaceServersContainer.innerHTML = `
+      <div class="card glass-card" style="padding: 24px; grid-column: 1 / -1; text-align: center;">
+        <p style="color: var(--text-muted); font-size: 0.85rem;">No active servers found in this region.</p>
+      </div>`;
+    return;
+  }
+
+  servers.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'card glass-card server-fleet-card';
+    card.innerHTML = `
+      <div class="server-card-top">
+        <div class="server-identity-wrap">
+          <div class="server-node-avatar">
+            <i data-lucide="${s.is_local_host ? 'hard-drive' : 'server'}"></i>
+          </div>
+          <div>
+            <div class="server-node-name">${s.name}</div>
+            <div class="server-node-role">${s.role} • <code>${s.id}</code></div>
+          </div>
+        </div>
+        <span class="health-pill ${s.state === 'running' ? 'healthy' : 'critical'}">
+          ● ${s.state.toUpperCase()}
+        </span>
+      </div>
+
+      <div class="server-metric-row">
+        <div class="server-metric-labels">
+          <span style="color: var(--text-secondary);">CPU Utilization</span>
+          <strong>${s.cpu_percent}% (${s.cpu_cores} vCPU)</strong>
+        </div>
+        <div class="mini-progress-bar">
+          <div class="progress-bar-inner bg-blue" style="width: ${Math.min(s.cpu_percent, 100)}%;"></div>
+        </div>
+      </div>
+
+      <div class="server-metric-row">
+        <div class="server-metric-labels">
+          <span style="color: var(--text-secondary);">Memory Allocation</span>
+          <strong>${s.memory_percent}% (${s.memory_used_gb} / ${s.memory_total_gb} GB)</strong>
+        </div>
+        <div class="mini-progress-bar">
+          <div class="progress-bar-inner bg-purple" style="width: ${Math.min(s.memory_percent, 100)}%;"></div>
+        </div>
+      </div>
+
+      <div class="server-info-matrix">
+        <div class="server-info-item">
+          <span class="server-info-title">Type & Zone</span>
+          <span class="server-info-val">${s.type} • ${s.az}</span>
+        </div>
+        <div class="server-info-item">
+          <span class="server-info-title">Uptime</span>
+          <span class="server-info-val">${s.uptime}</span>
+        </div>
+        <div class="server-info-item">
+          <span class="server-info-title">Private IPv4</span>
+          <span class="server-info-val">${s.private_ip}</span>
+        </div>
+        <div class="server-info-item">
+          <span class="server-info-title">Public IPv4</span>
+          <span class="server-info-val">${s.public_ip}</span>
+        </div>
+      </div>
+
+      <div class="server-actions-row">
+        <button class="action-btn" style="padding: 6px 12px; font-size: 0.78rem;" onclick="sendPromptToAi('Audit telemetry for server ${s.name} (${s.id})')">
+          <i data-lucide="sparkles" style="width: 14px; height: 14px;"></i>
+          <span>Diagnose Node</span>
+        </button>
+        <span class="badge-status-pill" style="font-size: 0.7rem;">
+          ${s.is_local_host ? 'Host Master' : 'Compute Worker'}
+        </span>
+      </div>
+    `;
+    elements.workspaceServersContainer.appendChild(card);
+  });
+
+  initLucide();
 }
 
 // -----------------------------------------------------------------------------
@@ -335,6 +436,7 @@ function initEventListeners() {
       fetchCloudWatchFleetMetrics();
       fetchIncidents();
       fetchWorkspaceSummary();
+      fetchWorkspaceServers();
     });
   }
 
@@ -405,6 +507,9 @@ function switchView(viewName) {
   } else if (viewName === 'workspace') {
     elements.views.workspace.classList.add('active');
     fetchWorkspaceSummary();
+    if (state.activeWorkspaceTab === 'servers') {
+      fetchWorkspaceServers();
+    }
     initLucide();
   } else {
     elements.views.resources.classList.add('active');
@@ -424,6 +529,10 @@ function switchWorkspaceTab(tabName) {
       panel.classList.toggle('active', key === tabName);
     }
   });
+
+  if (tabName === 'servers') {
+    fetchWorkspaceServers();
+  }
 
   initLucide();
 }
@@ -537,6 +646,7 @@ window.triggerRemediation = async function(anomalyId, actionType, target) {
     fetchLogs();
     fetchMetrics();
     fetchWorkspaceSummary();
+    fetchWorkspaceServers();
   } catch (err) {
     console.error('Remediation error:', err);
   }
