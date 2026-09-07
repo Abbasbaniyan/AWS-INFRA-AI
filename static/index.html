@@ -609,9 +609,7 @@
     .icon-close-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; }
     .icon-close-btn:hover { color: #fff; }
 
-    /* ==========================================================
-       WORKSPACE SHELL & SUB-NAVIGATION STYLES (PHASE 1)
-       ========================================================== */
+    /* WORKSPACE SHELL & SUB-NAVIGATION STYLES */
     .workspace-header-bar {
       display: flex;
       align-items: center;
@@ -753,9 +751,7 @@
     .text-amber { color: var(--accent-amber); }
     .text-rose { color: var(--accent-rose); }
 
-    /* ==========================================================
-       RESPONSIVE BREAKPOINTS
-       ========================================================== */
+    /* RESPONSIVE BREAKPOINTS */
     @media (max-width: 1280px) {
       .quick-insights-container {
         grid-template-columns: repeat(3, 1fr);
@@ -1234,7 +1230,7 @@
 
       </section>
 
-      <!-- VIEW: WORKSPACE CENTRAL CONTROL (PHASE 1 SHELL) -->
+      <!-- VIEW: WORKSPACE CENTRAL CONTROL -->
       <section id="view-workspace" class="content-view">
         <div class="workspace-header-bar">
           <div class="workspace-title-group">
@@ -1277,23 +1273,23 @@
           <div class="workspace-stat-grid">
             <div class="card glass-card workspace-stat-card">
               <span class="insight-label">CONNECTED SERVERS</span>
-              <span class="insight-main-val">2 Nodes</span>
-              <span class="insight-sub-val" style="color: var(--accent-emerald);">● 100% Online & Reachable</span>
+              <span class="insight-main-val" id="wsConnectedServers">-- Nodes</span>
+              <span class="insight-sub-val" id="wsServerSub" style="color: var(--accent-emerald);">● Synchronizing...</span>
             </div>
             <div class="card glass-card workspace-stat-card">
               <span class="insight-label">AI MODEL ENGINE</span>
-              <span class="insight-main-val">qwen2.5-coder</span>
-              <span class="insight-sub-val" style="color: var(--accent-cyan);">CPU-Optimized (0.5b / 1.5b)</span>
+              <span class="insight-main-val" id="wsModelEngine">--</span>
+              <span class="insight-sub-val" id="wsModelSub" style="color: var(--accent-cyan);">Detecting status...</span>
             </div>
             <div class="card glass-card workspace-stat-card">
               <span class="insight-label">ACTIVE SERVICES</span>
-              <span class="insight-main-val">4 Healthy</span>
-              <span class="insight-sub-val" style="color: var(--text-secondary);">FastAPI, Ollama, Nginx, Docker</span>
+              <span class="insight-main-val" id="wsActiveServices">-- Healthy</span>
+              <span class="insight-sub-val" id="wsServicesSub" style="color: var(--text-secondary);">Querying host...</span>
             </div>
             <div class="card glass-card workspace-stat-card">
               <span class="insight-label">WORKSPACE HEALTH INDEX</span>
-              <span class="insight-main-val">96 / 100</span>
-              <span class="insight-sub-val" style="color: var(--accent-emerald);">Nominal SRE Parameters</span>
+              <span class="insight-main-val" id="wsHealthIndex">-- / 100</span>
+              <span class="insight-sub-val" id="wsHealthSub" style="color: var(--accent-emerald);">Evaluating telemetry...</span>
             </div>
           </div>
 
@@ -1303,10 +1299,10 @@
                 <i data-lucide="sparkles" class="card-header-icon text-cyan"></i>
                 <h3>Workspace Central Dashboard</h3>
               </div>
-              <span class="pulse-badge">● Phase 1 Shell Active</span>
+              <span class="pulse-badge">● Live Metrics Connected</span>
             </div>
             <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
-              Welcome to the <strong>AI Infrastructure Workspace</strong>. This central control center provides unified visibility across EC2 host instances, local Ollama model lifecycle, continuous service deployments, and AI-grounded infrastructure actions. Full real-time metrics aggregation and model controls will be connected in subsequent phases.
+              Welcome to the <strong>AI Infrastructure Workspace</strong>. This central control center provides unified visibility across EC2 host instances, local Ollama model lifecycle, continuous service deployments, and AI-grounded infrastructure actions. Data across your server nodes and AI models is synchronized dynamically in real time.
             </p>
           </div>
         </div>

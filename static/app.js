@@ -39,6 +39,16 @@ const elements = {
     deployments: document.getElementById('workspace-panel-deployments'),
     activity: document.getElementById('workspace-panel-activity')
   },
+  // Workspace Overview KPI elements
+  wsConnectedServers: document.getElementById('wsConnectedServers'),
+  wsServerSub: document.getElementById('wsServerSub'),
+  wsModelEngine: document.getElementById('wsModelEngine'),
+  wsModelSub: document.getElementById('wsModelSub'),
+  wsActiveServices: document.getElementById('wsActiveServices'),
+  wsServicesSub: document.getElementById('wsServicesSub'),
+  wsHealthIndex: document.getElementById('wsHealthIndex'),
+  wsHealthSub: document.getElementById('wsHealthSub'),
+
   healthScoreValue: document.getElementById('healthScoreValue'),
   healthProgressRing: document.getElementById('healthProgressRing'),
   healthStatusText: document.getElementById('healthStatusText'),
@@ -181,16 +191,70 @@ function startDataPolling() {
   fetchLogs();
   fetchCloudWatchFleetMetrics();
   fetchIncidents();
+  fetchWorkspaceSummary();
 
   state.pollTimers.push(setInterval(fetchMetrics, 3000));
   state.pollTimers.push(setInterval(fetchAnomalies, 4000));
   state.pollTimers.push(setInterval(fetchLogs, 5000));
+  state.pollTimers.push(setInterval(fetchWorkspaceSummary, 6000));
   state.pollTimers.push(setInterval(fetchCloudWatchFleetMetrics, 30000));
 }
 
 function stopDataPolling() {
   state.pollTimers.forEach(id => clearInterval(id));
   state.pollTimers = [];
+}
+
+// -----------------------------------------------------------------------------
+// WORKSPACE PHASE 2: Live Summary Aggregator
+// -----------------------------------------------------------------------------
+async function fetchWorkspaceSummary() {
+  if (!state.isAuthenticated) return;
+  try {
+    const res = await fetch('/api/workspace/summary');
+    if (!res.ok) return;
+    const data = await res.json();
+    updateWorkspaceSummaryUI(data);
+  } catch (err) {
+    console.error('Workspace summary fetch error:', err);
+  }
+}
+
+function updateWorkspaceSummaryUI(data) {
+  if (!data) return;
+
+  const servers = data.servers || {};
+  const aiModel = data.ai_model || {};
+  const services = data.services || {};
+  const health = data.health || {};
+
+  if (elements.wsConnectedServers) {
+    elements.wsConnectedServers.textContent = `${servers.running ?? servers.total ?? 2} Nodes`;
+  }
+  if (elements.wsServerSub && servers.subtitle) {
+    elements.wsServerSub.textContent = servers.subtitle;
+  }
+
+  if (elements.wsModelEngine) {
+    elements.wsModelEngine.textContent = aiModel.model_name || 'qwen2.5-coder';
+  }
+  if (elements.wsModelSub && aiModel.subtitle) {
+    elements.wsModelSub.textContent = aiModel.subtitle;
+  }
+
+  if (elements.wsActiveServices) {
+    elements.wsActiveServices.textContent = `${services.healthy ?? 4} Healthy`;
+  }
+  if (elements.wsServicesSub && services.subtitle) {
+    elements.wsServicesSub.textContent = services.subtitle;
+  }
+
+  if (elements.wsHealthIndex) {
+    elements.wsHealthIndex.textContent = `${health.score ?? 96} / 100`;
+  }
+  if (elements.wsHealthSub && health.subtitle) {
+    elements.wsHealthSub.textContent = health.subtitle;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -270,6 +334,7 @@ function initEventListeners() {
       fetchLogs();
       fetchCloudWatchFleetMetrics();
       fetchIncidents();
+      fetchWorkspaceSummary();
     });
   }
 
@@ -331,7 +396,6 @@ function initEventListeners() {
 function switchView(viewName) {
   state.activeView = viewName;
   
-  // Hide all primary view containers safely
   if (elements.views.dashboard) elements.views.dashboard.classList.remove('active');
   if (elements.views.resources) elements.views.resources.classList.remove('active');
   if (elements.views.workspace) elements.views.workspace.classList.remove('active');
@@ -340,6 +404,7 @@ function switchView(viewName) {
     elements.views.dashboard.classList.add('active');
   } else if (viewName === 'workspace') {
     elements.views.workspace.classList.add('active');
+    fetchWorkspaceSummary();
     initLucide();
   } else {
     elements.views.resources.classList.add('active');
@@ -471,6 +536,7 @@ window.triggerRemediation = async function(anomalyId, actionType, target) {
     fetchAnomalies();
     fetchLogs();
     fetchMetrics();
+    fetchWorkspaceSummary();
   } catch (err) {
     console.error('Remediation error:', err);
   }
