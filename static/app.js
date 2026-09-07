@@ -210,7 +210,7 @@ function stopDataPolling() {
 }
 
 // -----------------------------------------------------------------------------
-// Global Manual Refresh Handler (Fixed)
+// Global Manual Refresh Handler
 // -----------------------------------------------------------------------------
 async function dispatchGlobalRefresh() {
   if (!state.isAuthenticated) return;
@@ -466,7 +466,7 @@ window.triggerModelAction = async function(modelName, actionType) {
 };
 
 // -----------------------------------------------------------------------------
-// WORKSPACE PHASE 5: Deployments Fetcher & Lifecycle Action Handlers
+// WORKSPACE: Deployments Fetcher & Lifecycle Action Handlers
 // -----------------------------------------------------------------------------
 async function fetchWorkspaceDeployments() {
   if (!state.isAuthenticated) return;
@@ -514,7 +514,7 @@ function renderWorkspaceDeploymentsUI(deployments) {
       <td><span style="font-size:0.75rem; color:var(--text-muted);">${d.target_host}</span></td>
       <td>
         <div style="display:flex; gap:6px;">
-          <button class="action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-cyan); color:var(--accent-cyan);" onclick="triggerDeploymentAction('${d.service}', 'restart')">
+          <button class="action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-cyan); color:var(--accent-cyan);" onclick="triggerDeploymentAction('${d.service}', 'restart', this)">
             <i data-lucide="rotate-cw" style="width:12px; height:12px;"></i> Restart
           </button>
           <button class="action-btn" style="padding:4px 8px; font-size:0.75rem;" onclick="sendPromptToAi('Inspect service logs and deployment state for: ${d.name} (${d.service})')">
@@ -529,20 +529,76 @@ function renderWorkspaceDeploymentsUI(deployments) {
   initLucide();
 }
 
-window.triggerDeploymentAction = async function(serviceName, actionType) {
+window.triggerDeploymentAction = async function(serviceName, actionType, btnElement) {
+  let originalHtml = '';
+  if (btnElement) {
+    btnElement.disabled = true;
+    originalHtml = btnElement.innerHTML;
+    btnElement.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:12px; height:12px;"></i> Restarting...`;
+    initLucide();
+  }
+
   try {
     await fetch('/api/workspace/deployments/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ service_id: serviceName, action: actionType })
     });
-    fetchWorkspaceDeployments();
-    fetchWorkspaceSummary();
-    fetchLogs();
+    await fetchLogs();
+    await fetchWorkspaceDeployments();
+    await fetchWorkspaceSummary();
   } catch (err) {
     console.error(`Deployment action ${actionType} failed:`, err);
+  } finally {
+    if (btnElement) {
+      setTimeout(() => {
+        btnElement.disabled = false;
+        btnElement.innerHTML = originalHtml;
+        initLucide();
+      }, 700);
+    }
   }
 };
+
+// -----------------------------------------------------------------------------
+// Live Log Stream
+// -----------------------------------------------------------------------------
+async function fetchLogs() {
+  if (!state.isAuthenticated) return;
+  try {
+    const filter = elements.logLevelFilter ? elements.logLevelFilter.value : 'ALL';
+    const res = await fetch(`/api/logs?level=${filter}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    state.logs = data.logs || [];
+    renderLogs();
+  } catch (err) {
+    console.error('Logs fetch error:', err);
+  }
+}
+
+function renderLogs() {
+  const filter = elements.logLevelFilter ? elements.logLevelFilter.value : 'ALL';
+  if (!elements.dashboardLogBox) return;
+  elements.dashboardLogBox.innerHTML = '';
+
+  const filtered = filter === 'ALL' ? state.logs : state.logs.filter(l => l.level === filter);
+
+  filtered.forEach(log => {
+    const row = document.createElement('div');
+    row.className = 'log-entry';
+    row.innerHTML = `
+      <span class="log-ts">${log.timestamp}</span>
+      <span class="log-lvl ${log.level}">[${log.level}]</span>
+      <span class="log-src">${log.source}:</span>
+      <span class="log-msg">${log.message}</span>
+    `;
+    elements.dashboardLogBox.appendChild(row);
+  });
+  
+  // Set scrollTop to 0 to prioritize displaying the newest logs at the top
+  elements.dashboardLogBox.scrollTop = 0;
+}
 
 // -----------------------------------------------------------------------------
 // Navigation & Event Listeners
@@ -993,44 +1049,6 @@ window.inspectNode = function(nodeId) {
 
   elements.nodeModal.classList.add('open');
 };
-
-// -----------------------------------------------------------------------------
-// Live Log Stream
-// -----------------------------------------------------------------------------
-async function fetchLogs() {
-  if (!state.isAuthenticated) return;
-  try {
-    const filter = elements.logLevelFilter ? elements.logLevelFilter.value : 'ALL';
-    const res = await fetch(`/api/logs?level=${filter}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    state.logs = data.logs || [];
-    renderLogs();
-  } catch (err) {
-    console.error('Logs fetch error:', err);
-  }
-}
-
-function renderLogs() {
-  const filter = elements.logLevelFilter ? elements.logLevelFilter.value : 'ALL';
-  if (!elements.dashboardLogBox) return;
-  elements.dashboardLogBox.innerHTML = '';
-
-  const filtered = filter === 'ALL' ? state.logs : state.logs.filter(l => l.level === filter);
-
-  filtered.forEach(log => {
-    const row = document.createElement('div');
-    row.className = 'log-entry';
-    row.innerHTML = `
-      <span class="log-ts">${log.timestamp}</span>
-      <span class="log-lvl ${log.level}">[${log.level}]</span>
-      <span class="log-src">${log.source}:</span>
-      <span class="log-msg">${log.message}</span>
-    `;
-    elements.dashboardLogBox.appendChild(row);
-  });
-  elements.dashboardLogBox.scrollTop = elements.dashboardLogBox.scrollHeight;
-}
 
 // -----------------------------------------------------------------------------
 // AWS Resource Catalog Tables
