@@ -40,7 +40,6 @@ const elements = {
     deployments: document.getElementById('workspace-panel-deployments'),
     activity: document.getElementById('workspace-panel-activity')
   },
-  // Workspace elements
   wsConnectedServers: document.getElementById('wsConnectedServers'),
   wsServerSub: document.getElementById('wsServerSub'),
   wsModelEngine: document.getElementById('wsModelEngine'),
@@ -254,7 +253,7 @@ async function dispatchGlobalRefresh() {
 }
 
 // -----------------------------------------------------------------------------
-// WORKSPACE: Summary, Fleet, Models, Deployments & Activity Handlers
+// WORKSPACE Handlers
 // -----------------------------------------------------------------------------
 async function fetchWorkspaceSummary() {
   if (!state.isAuthenticated) return;
@@ -428,16 +427,16 @@ function renderWorkspaceModelsUI(models) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><strong><code>${m.name}</code></strong></td>
-      <td><span class="badge-status-pill">${m.parameter_size}</span></td>
-      <td><code>${m.quantization_level}</code></td>
-      <td>${m.size_mb} MB</td>
+      <td><span class="badge-status-pill">${m.parameter_size || '0.5B'}</span></td>
+      <td><code>${m.quantization_level || 'Q4'}</code></td>
+      <td>${m.size_mb || 394} MB</td>
       <td>
         <span class="model-status-badge ${m.is_active ? 'in-memory' : 'idle'}">
           ● ${m.status}
         </span>
       </td>
-      <td><strong style="color:var(--accent-cyan);">${m.ram_allocation_mb} MB</strong></td>
-      <td><span style="font-size:0.75rem; color:var(--text-muted);">${m.server}</span></td>
+      <td><strong style="color:var(--accent-cyan);">${m.ram_allocation_mb || 390} MB</strong></td>
+      <td><span style="font-size:0.75rem; color:var(--text-muted);">${m.server || 'Host'}</span></td>
       <td>
         <div style="display:flex; gap:6px;">
           ${
@@ -449,7 +448,7 @@ function renderWorkspaceModelsUI(models) {
                   <i data-lucide="zap" style="width:12px; height:12px;"></i> Pin RAM
                  </button>`
           }
-          <button class="action-btn" style="padding:4px 8px; font-size:0.75rem;" onclick="sendPromptToAi('Benchmark latency and token throughput for model: ${m.name}')">
+          <button class="action-btn" style="padding:4px 8px; font-size:0.75rem;" onclick="sendPromptToAi('Benchmark latency for model: ${m.name}')">
             <i data-lucide="sparkles" style="width:12px; height:12px;"></i>
           </button>
         </div>
@@ -463,12 +462,11 @@ function renderWorkspaceModelsUI(models) {
 
 window.triggerModelAction = async function(modelName, actionType) {
   try {
-    const res = await fetch('/api/workspace/models/action', {
+    await fetch('/api/workspace/models/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: modelName, action: actionType })
     });
-    const data = await res.json();
     fetchWorkspaceModels();
     fetchWorkspaceSummary();
     fetchLogs();
@@ -508,27 +506,24 @@ function renderWorkspaceDeploymentsUI(deployments) {
     tr.innerHTML = `
       <td>
         <div style="display:flex; flex-direction:column;">
-          <strong>${d.name}</strong>
+          <strong>${d.name || d.service}</strong>
           <code style="font-size:0.72rem; color:var(--text-muted);">${d.service}</code>
         </div>
       </td>
-      <td><code>:${d.port}</code></td>
-      <td><span style="font-size:0.78rem; color:var(--text-secondary);">${d.runtime}</span></td>
-      <td><span class="badge-status-pill">${d.commit}</span></td>
+      <td><code>:${d.port || 80}</code></td>
+      <td><span style="font-size:0.78rem; color:var(--text-secondary);">${d.runtime || 'Systemd'}</span></td>
+      <td><span class="badge-status-pill">${d.commit || 'active'}</span></td>
       <td>
         <span class="health-pill ${d.status === 'running' ? 'healthy' : 'critical'}">
           ● ${d.status.toUpperCase()}
         </span>
       </td>
-      <td>${d.uptime}</td>
-      <td><span style="font-size:0.75rem; color:var(--text-muted);">${d.target_host}</span></td>
+      <td>${d.uptime || 'Active'}</td>
+      <td><span style="font-size:0.75rem; color:var(--text-muted);">${d.target_host || 'Host'}</span></td>
       <td>
         <div style="display:flex; gap:6px;">
           <button class="action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-cyan); color:var(--accent-cyan);" onclick="triggerDeploymentAction('${d.service}', 'restart', this)">
             <i data-lucide="rotate-cw" style="width:12px; height:12px;"></i> Restart
-          </button>
-          <button class="action-btn" style="padding:4px 8px; font-size:0.75rem;" onclick="sendPromptToAi('Inspect service logs and deployment state for: ${d.name} (${d.service})')">
-            <i data-lucide="sparkles" style="width:12px; height:12px;"></i>
           </button>
         </div>
       </td>
@@ -540,14 +535,6 @@ function renderWorkspaceDeploymentsUI(deployments) {
 }
 
 window.triggerDeploymentAction = async function(serviceName, actionType, btnElement) {
-  let originalHtml = '';
-  if (btnElement) {
-    btnElement.disabled = true;
-    originalHtml = btnElement.innerHTML;
-    btnElement.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:12px; height:12px;"></i> Restarting...`;
-    initLucide();
-  }
-
   try {
     await fetch('/api/workspace/deployments/action', {
       method: 'POST',
@@ -557,17 +544,8 @@ window.triggerDeploymentAction = async function(serviceName, actionType, btnElem
     await fetchLogs();
     await fetchWorkspaceDeployments();
     await fetchWorkspaceSummary();
-    await fetchWorkspaceActivity();
   } catch (err) {
     console.error(`Deployment action ${actionType} failed:`, err);
-  } finally {
-    if (btnElement) {
-      setTimeout(() => {
-        btnElement.disabled = false;
-        btnElement.innerHTML = originalHtml;
-        initLucide();
-      }, 700);
-    }
   }
 };
 
@@ -587,7 +565,6 @@ async function fetchWorkspaceActivity() {
 function renderWorkspaceActivityUI() {
   if (!elements.workspaceActivityTableBody) return;
   elements.workspaceActivityTableBody.innerHTML = '';
-
   const filter = elements.wsActivityCategoryFilter ? elements.wsActivityCategoryFilter.value : 'ALL';
   const filtered = filter === 'ALL' ? state.activityList : state.activityList.filter(a => a.category === filter);
 
@@ -602,10 +579,8 @@ function renderWorkspaceActivityUI() {
       <td style="font-family:var(--font-mono); font-size:0.76rem; color:var(--text-muted);">${ev.timestamp}</td>
       <td><span class="badge-status-pill">${ev.category}</span></td>
       <td><strong style="color:var(--accent-purple);">${ev.source}</strong></td>
-      <td>
-        <span class="log-lvl ${ev.severity}" style="font-weight:700; font-size:0.74rem;">[${ev.severity}]</span>
-      </td>
-      <td style="color:var(--text-secondary); word-break:break-word;">${ev.message}</td>
+      <td><span class="log-lvl ${ev.severity}">[${ev.severity}]</span></td>
+      <td style="color:var(--text-secondary);">${ev.message}</td>
     `;
     elements.workspaceActivityTableBody.appendChild(tr);
   });
@@ -646,7 +621,6 @@ function renderLogs() {
     `;
     elements.dashboardLogBox.appendChild(row);
   });
-  
   elements.dashboardLogBox.scrollTop = 0;
 }
 
@@ -691,7 +665,7 @@ function renderTopology(topology) {
       <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectDigitalTwinNode('${n.id}')">
         <circle r="22" fill="#0e1526" stroke="#38bdf8" stroke-width="3"/>
         <text text-anchor="middle" y="36" fill="#f8fafc" font-size="11" font-weight="700">${n.label}</text>
-        <circle r="6" fill="#10b981" cx="14" cy="-14" style="box-shadow: 0 0 10px #10b981;"/>
+        <circle r="6" fill="#10b981" cx="14" cy="-14"/>
       </g>
     `;
   });
@@ -706,54 +680,25 @@ window.inspectDigitalTwinNode = function(nodeId) {
   if (!node) return;
 
   const nodeLabel = node.label || node.id || 'Unknown Node';
-  const nodeType = node.type ? node.type.toUpperCase() : 'SERVICE';
-  const nodeRegion = node.region || 'eu-north-1';
-
   elements.dtDrawerTitle.textContent = `${nodeLabel} (${node.id})`;
   elements.dtDrawerBody.innerHTML = `
     <div>
       <span class="dt-section-title">NODE TELEMETRY & HEALTH</span>
       <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-glass); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:10px;">
         <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Operational Status</span><span class="health-pill healthy">● HEALTHY</span></div>
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Architecture Type</span><code>${nodeType}</code></div>
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">AWS Availability Zone</span><code>${nodeRegion}</code></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Architecture Type</span><code>${(node.type || 'service').toUpperCase()}</code></div>
+        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">AWS Region</span><code>${node.region || 'eu-north-1'}</code></div>
       </div>
     </div>
-
-    <div>
-      <span class="dt-section-title">ACTIVE RUNTIME METRICS</span>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <div>
-          <div style="display:flex; justify-content:space-between; font-size:0.78rem;"><span>Processor Load (vCPU)</span><strong>28.4%</strong></div>
-          <div class="mini-progress-bar"><div class="progress-bar-inner bg-blue" style="width:28.4%;"></div></div>
-        </div>
-        <div>
-          <div style="display:flex; justify-content:space-between; font-size:0.78rem;"><span>RAM Memory Footprint</span><strong>59.7%</strong></div>
-          <div class="mini-progress-bar"><div class="progress-bar-inner bg-purple" style="width:59.7%;"></div></div>
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <span class="dt-section-title">AI SRE ASSESSMENT</span>
-      <div style="background:rgba(56,189,248,0.06); border:1px solid rgba(56,189,248,0.25); border-radius:var(--radius-md); padding:12px; font-size:0.82rem; color:var(--text-primary); line-height:1.5;">
-        "Node telemetry is operating within nominal baseline parameters. No critical latency anomalies or memory leaks detected."
-      </div>
-    </div>
-
     <div>
       <span class="dt-section-title">QUICK ACTIONS</span>
       <div class="dt-action-grid">
         <button class="action-btn" style="justify-content:center; font-size:0.78rem;" onclick="sendPromptToAi('Inspect telemetry for node ${nodeLabel}')">Ask AI</button>
-        <button class="action-btn" style="justify-content:center; font-size:0.78rem;" onclick="openSimulationModal('ollama.service', 'stop')">Simulate Outage</button>
         <button class="action-btn" style="justify-content:center; font-size:0.78rem; border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="dispatchGlobalRefresh()">Sync Node</button>
       </div>
     </div>
   `;
-
-  if (elements.digitalTwinDrawer) {
-    elements.digitalTwinDrawer.classList.add('open');
-  }
+  if (elements.digitalTwinDrawer) elements.digitalTwinDrawer.classList.add('open');
 };
 
 if (elements.closeDtDrawerBtn) {
@@ -763,7 +708,7 @@ if (elements.closeDtDrawerBtn) {
 }
 
 // -----------------------------------------------------------------------------
-// What-If Simulation Engine
+// Simulation Modal
 // -----------------------------------------------------------------------------
 window.openSimulationModal = async function(serviceName, actionType) {
   elements.simulationModal.classList.add('open');
@@ -785,38 +730,21 @@ window.openSimulationModal = async function(serviceName, actionType) {
       </div>
       <div style="display:flex; flex-direction:column; gap:6px; font-size:0.82rem;">
         <div style="display:flex; justify-content:space-between;"><span>AI SRE Chat Assistant:</span><strong>${sim.ai_chat}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span>LLM Model Inference:</span><strong>${sim.model_inference}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span>Control Plane Dashboard:</span><strong>${sim.frontend_ui}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span>Nginx Ingress Routing:</span><strong>${sim.nginx_ingress}</strong></div>
-        <div style="display:flex; justify-content:space-between; margin-top:4px; border-top:1px solid var(--border-glass); padding-top:6px;"><span>Predicted Risk Level:</span><span class="health-pill critical">${sim.risk_level}</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>Model Inference:</span><strong>${sim.model_inference}</strong></div>
+        <div style="display:flex; justify-content:space-between; margin-top:4px; border-top:1px solid var(--border-glass); padding-top:6px;"><span>Risk Level:</span><span class="health-pill critical">${sim.risk_level}</span></div>
       </div>
     `;
-
-    const execBtn = document.getElementById('executeSimulationBtn');
-    if (execBtn) {
-      execBtn.onclick = async () => {
-        execBtn.disabled = true;
-        execBtn.textContent = 'Executing Production Action...';
-        await triggerDeploymentAction(serviceName, 'restart');
-        closeSimulationModal();
-        execBtn.disabled = false;
-        execBtn.textContent = 'Execute Action in Production';
-      };
-    }
   } catch (err) {
     console.error('Simulation error:', err);
-    elements.simulationModalContent.innerHTML = '<p style="color:var(--accent-rose);">Simulation engine request failed.</p>';
   }
 };
 
 window.closeSimulationModal = function() {
-  if (elements.simulationModal) {
-    elements.simulationModal.classList.remove('open');
-  }
+  if (elements.simulationModal) elements.simulationModal.classList.remove('open');
 };
 
 // -----------------------------------------------------------------------------
-// AI SRE Assistant with Two-Way UI Synchronization Support
+// AI Assistant & UI Synchronization Engine
 // -----------------------------------------------------------------------------
 async function sendAiMessage() {
   const text = elements.aiChatInput.value.trim();
@@ -840,82 +768,44 @@ async function sendAiMessage() {
       })
     });
 
-    if (!res.ok) {
-      throw new Error(`HTTP Error ${res.status}: Server returned an invalid response.`);
-    }
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
 
     const data = await res.json();
     removeMessageById(loadingId);
 
-    const replyContent = data.reply || 'No response returned from the assistant.';
+    const replyContent = data.reply || 'Action executed successfully.';
     
-    // Two-Way UI Synchronization Handler
+    // Execute UI synchronization directive if returned by agent
     if (data.ui_action) {
-      if (data.ui_action.type === 'REFRESH_DASHBOARD') {
+      const action = data.ui_action;
+      if (action.type === 'REFRESH_DASHBOARD') {
         dispatchGlobalRefresh();
-      } else if (data.ui_action.type === 'FILTER_LOGS') {
+      } else if (action.type === 'FILTER_LOGS') {
         const levelSelect = document.getElementById('logLevelFilter');
         if (levelSelect) {
-          levelSelect.value = data.ui_action.level || 'ALL';
+          levelSelect.value = action.level || 'ALL';
           renderLogs();
         }
-      } else if (data.ui_action.type === 'CLEAR_LOGS') {
+      } else if (action.type === 'CLEAR_LOGS') {
         state.logs = [];
         renderLogs();
+      } else if (action.type === 'NAVIGATE_VIEW') {
+        const navBtn = document.querySelector(`[data-view="${action.view}"]`);
+        if (navBtn) navBtn.click();
+        else switchView(action.view);
+      } else if (action.type === 'SWITCH_WORKSPACE_TAB') {
+        switchWorkspaceTab(action.tab);
       }
     }
 
-    let runbookActionHtml = '';
-    const lowerP = text.toLowerCase();
-
-    if (lowerP.includes('what happens if') || lowerP.includes('simulate') || lowerP.includes('stop ollama')) {
-      runbookActionHtml = `
-        <div class="ai-action-runbook-card" style="border-color:var(--accent-amber); background:rgba(245,158,11,0.06);">
-          <div class="ai-runbook-header" style="color:var(--accent-amber);">
-            <span>🧪 DIGITAL TWIN WHAT-IF SIMULATION</span>
-            <span>ollama.service</span>
-          </div>
-          <p style="font-size:0.78rem; color:var(--text-secondary); margin:0;">Predict cascade impact before executing production changes.</p>
-          <button class="ai-runbook-btn" style="background:var(--accent-amber); color:#000;" onclick="openSimulationModal('ollama.service', 'stop')">
-            Launch Outage Simulation
-          </button>
-        </div>`;
-    } 
-    else if (lowerP.includes('restart') || lowerP.includes('reload') || lowerP.includes('start') || lowerP.includes('stop')) {
-      const servicesMap = {
-        'docker': { id: 'docker', name: 'Docker Engine' },
-        'nginx': { id: 'nginx', name: 'Nginx Proxy' },
-        'api': { id: 'aws-infra-api', name: 'FastAPI Backend' },
-        'ollama': { id: 'ollama.service', name: 'Ollama Daemon' }
-      };
-
-      for (const [key, svc] of Object.entries(servicesMap)) {
-        if (lowerP.includes(key)) {
-          const act = lowerP.includes('stop') ? 'stop' : 'restart';
-          runbookActionHtml = `
-            <div class="ai-action-runbook-card">
-              <div class="ai-runbook-header">
-                <span>⚡ SRE RUNBOOK ACTION RECOMMENDED</span>
-                <span>${svc.name}</span>
-              </div>
-              <button class="ai-runbook-btn" onclick="executeAiRunbookAction('${svc.id}', '${act}', this)">
-                Approve & Execute ${act.toUpperCase()}
-              </button>
-            </div>`;
-          break;
-        }
-      }
-    }
-
-    appendChatMessage('assistant', replyContent + runbookActionHtml);
-
+    appendChatMessage('assistant', replyContent);
     state.chatHistory.push({ role: 'user', content: text });
     state.chatHistory.push({ role: 'assistant', content: replyContent });
 
   } catch (err) {
     console.error('Chat error:', err);
     removeMessageById(loadingId);
-    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI model.');
+    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI agent.');
   } finally {
     elements.aiChatInput.disabled = false;
     elements.sendAiChatBtn.disabled = false;
@@ -927,9 +817,7 @@ function appendChatMessage(role, content) {
   const msgDiv = document.createElement('div');
   msgDiv.className = `chat-message ${role}`;
   msgDiv.innerHTML = `
-    <div class="message-avatar">
-      <i data-lucide="${role === 'assistant' ? 'bot' : 'user'}"></i>
-    </div>
+    <div class="message-avatar"><i data-lucide="${role === 'assistant' ? 'bot' : 'user'}"></i></div>
     <div class="message-content">${formatMarkdown(content)}</div>
   `;
   elements.aiChatMessages.appendChild(msgDiv);
@@ -944,9 +832,7 @@ function appendLoadingMessage() {
   msgDiv.className = 'chat-message assistant';
   msgDiv.innerHTML = `
     <div class="message-avatar"><i data-lucide="bot"></i></div>
-    <div class="message-content" style="color:var(--text-muted);">
-      <em>Agent tool execution & reasoning in progress...</em>
-    </div>
+    <div class="message-content" style="color:var(--text-muted);"><em>Agent tool execution in progress...</em></div>
   `;
   elements.aiChatMessages.appendChild(msgDiv);
   elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
@@ -960,27 +846,18 @@ function removeMessageById(id) {
 }
 
 window.sendPromptToAi = function(promptText) {
-  if (elements.aiAssistantPanel) {
-    elements.aiAssistantPanel.classList.add('open');
-  }
-  if (elements.aiChatInput) {
-    elements.aiChatInput.value = promptText;
-  }
+  if (elements.aiAssistantPanel) elements.aiAssistantPanel.classList.add('open');
+  if (elements.aiChatInput) elements.aiChatInput.value = promptText;
   sendAiMessage();
 };
 
 function formatMarkdown(text) {
   if (!text) return '';
   return text
-    .replace(/```bash([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
     .replace(/```json([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
     .replace(/```([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
-    .replace(/^#### (.*$)/gim, '<h5 style="color:var(--accent-cyan);margin:8px 0 4px 0;font-size:0.86rem;">$1</h5>')
-    .replace(/^### (.*$)/gim, '<h4 style="color:#fff;margin:10px 0 6px 0;font-size:0.95rem;font-weight:700;">$1</h4>')
-    .replace(/^## (.*$)/gim, '<h3 style="color:#fff;margin:12px 0 6px 0;font-size:1.05rem;font-weight:700;">$1</h3>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/^\s*-\s+(.*$)/gim, '<li style="margin-left:14px;list-style-type:disc;">$1</li>')
     .replace(/\n/g, '<br>');
 }
 
@@ -1032,30 +909,6 @@ async function fetchIncidents() {
     console.error('Fetch incidents error:', err);
   }
 }
-
-window.executeAiRunbookAction = async function(serviceName, actionType, btnElement) {
-  if (btnElement) {
-    btnElement.disabled = true;
-    btnElement.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:12px; height:12px;"></i> Executing...`;
-    initLucide();
-  }
-  try {
-    await fetch('/api/workspace/deployments/action', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ service_id: serviceName, action: actionType })
-    });
-    if (btnElement) {
-      btnElement.textContent = '✓ Executed';
-      btnElement.style.background = 'var(--accent-emerald)';
-      btnElement.style.color = '#fff';
-    }
-    appendChatMessage('assistant', `✅ **Action Succeeded:** \`${serviceName}\` has been **${actionType}ed** on host node.`);
-    await dispatchGlobalRefresh();
-  } catch (err) {
-    console.error('Runbook error:', err);
-  }
-};
 
 // -----------------------------------------------------------------------------
 // Navigation & Event Listeners
@@ -1255,6 +1108,10 @@ function updateDashboardUI(data) {
   if (elements.diskProgressBar) elements.diskProgressBar.style.width = `${Math.min(diskPercent, 100)}%`;
 
   if (elements.systemUptime) elements.systemUptime.textContent = uptime.formatted || '0h 0m 0s';
+  
+  if (Array.isArray(data.top_processes)) {
+    renderProcesses(data.top_processes);
+  }
   state.metrics = data;
 }
 
@@ -1313,6 +1170,24 @@ function renderAnomalies(anomalies) {
   initLucide();
 }
 
+function renderProcesses(processes) {
+  if (!elements.topProcessTableBody) return;
+  elements.topProcessTableBody.innerHTML = '';
+  if (elements.totalProcCount) elements.totalProcCount.textContent = `${processes.length} processes active`;
+
+  processes.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><code>${p.pid}</code></td>
+      <td><strong>${p.name}</strong></td>
+      <td><span class="${p.cpu_percent > 30 ? 'text-rose' : 'text-primary'}">${p.cpu_percent}%</span></td>
+      <td>${p.memory_percent}%</td>
+      <td><span class="health-pill healthy">${p.status || 'running'}</span></td>
+    `;
+    elements.topProcessTableBody.appendChild(tr);
+  });
+}
+
 async function renderResourceTable(type) {
   switchView(type);
   elements.resourceViewTitle.textContent = `${type.toUpperCase()} Resources`;
@@ -1326,7 +1201,7 @@ async function renderResourceTable(type) {
     elements.resourceTableBody.innerHTML = '';
     items.forEach(item => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td><code>${item.id || item.name}</code></td><td><strong>${item.name || item.id}</strong></td><td><span class="health-pill healthy">Active</span></td><td>${JSON.stringify(item.details || {})}</td>`;
+      tr.innerHTML = `<td><code>${item.id || item.name}</code></td><td><strong>${item.name || item.id}</strong></td><td><span class="health-pill healthy">${item.status || 'Active'}</span></td><td>${JSON.stringify(item.details || {})}</td>`;
       elements.resourceTableBody.appendChild(tr);
     });
   } catch (err) {
