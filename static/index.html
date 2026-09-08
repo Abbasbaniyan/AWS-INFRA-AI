@@ -331,7 +331,6 @@
 
     .header-actions { display: flex; align-items: center; gap: 14px; }
     
-    /* Polished Professional Action Button (Refresh) */
     .action-btn {
       display: inline-flex;
       align-items: center;
@@ -384,7 +383,7 @@
     }
     .logout-btn-mini:hover { color: var(--accent-rose); }
 
-    /* FLOATING AI SRE ASSISTANT BOT WIDGET (BOTTOM-RIGHT) */
+    /* FLOATING AI SRE ASSISTANT BOT WIDGET */
     .floating-ai-widget {
       position: fixed;
       bottom: 28px;
@@ -496,7 +495,7 @@
     .bg-emerald { background: var(--accent-emerald); }
     .uptime-badge { font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; margin-top: 10px; }
 
-    /* Topology (Digital Twin Canvas) */
+    /* Topology Canvas */
     .map-controls { display: flex; gap: 6px; }
     .map-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); color: var(--text-secondary); padding: 5px 8px; border-radius: var(--radius-sm); cursor: pointer; }
     .map-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
@@ -581,27 +580,10 @@
     .anomaly-item { padding: 12px 14px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 6px; }
     .anomaly-item.critical { border-left: 3px solid var(--accent-rose); background: rgba(239, 68, 68, 0.05); }
     .anomaly-item.warning { border-left: 3px solid var(--accent-amber); background: rgba(245, 158, 11, 0.05); }
-    .anomaly-item.info { border-left: 3px solid var(--accent-cyan); }
     .anomaly-header { display: flex; align-items: center; justify-content: space-between; }
     .anomaly-title { font-size: 0.85rem; font-weight: 600; }
     .anomaly-time { font-size: 0.7rem; color: var(--text-muted); }
     .anomaly-desc { font-size: 0.78rem; color: var(--text-secondary); }
-    .anomaly-action-row { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
-    .anomaly-resource-tag { font-size: 0.7rem; font-family: var(--font-mono); background: rgba(255, 255, 255, 0.06); padding: 2px 6px; border-radius: var(--radius-sm); }
-    .ai-diagnose-btn-inline {
-      background: transparent;
-      border: 1px solid var(--accent-cyan);
-      color: var(--accent-cyan);
-      font-size: 0.72rem;
-      font-weight: 600;
-      padding: 3px 8px;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .ai-diagnose-btn-inline:hover { background: var(--accent-cyan); color: #000; }
 
     /* Tables & Consoles */
     .table-responsive { overflow-x: auto; max-height: 280px; -webkit-overflow-scrolling: touch; }
@@ -618,12 +600,7 @@
     .log-src { color: var(--accent-purple); }
     .log-msg { color: var(--text-secondary); word-break: break-all; }
 
-    /* Sleek Professional Log Toolbar Controls (Dropdown & Trash) */
-    .log-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .log-actions { display: flex; align-items: center; gap: 10px; }
     .log-filter-select {
       background: rgba(7, 11, 20, 0.9);
       border: 1px solid rgba(56, 189, 248, 0.25);
@@ -636,22 +613,10 @@
       outline: none;
       cursor: pointer;
       appearance: none;
-      -webkit-appearance: none;
-      -moz-appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 10px center;
-      transition: all 0.2s ease;
       box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
-    }
-    .log-filter-select:hover, .log-filter-select:focus {
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.4);
-    }
-    .log-filter-select option {
-      background-color: #0e1526;
-      color: #f8fafc;
-      padding: 8px;
     }
     .icon-action-btn {
       display: inline-flex;
@@ -670,8 +635,6 @@
       background: rgba(239, 68, 68, 0.12);
       border-color: rgba(239, 68, 68, 0.4);
       color: var(--accent-rose);
-      box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
-      transform: translateY(-1px);
     }
     .icon-action-btn svg { width: 15px; height: 15px; }
 
@@ -699,9 +662,8 @@
     .ai-name { font-size: 0.95rem; font-weight: 700; }
     .ai-status { font-size: 0.7rem; color: var(--accent-emerald); display: flex; align-items: center; gap: 5px; }
     .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-emerald); }
-    .ai-prompts-slider { padding: 10px 16px; display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--border-glass); white-space: nowrap; -webkit-overflow-scrolling: touch; }
-    .prompt-chip { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); color: var(--text-secondary); font-size: 0.72rem; padding: 5px 10px; border-radius: var(--radius-full); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0; }
-    .prompt-chip:hover { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); border-color: var(--accent-cyan); }
+    .ai-prompts-slider { padding: 10px 16px; display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--border-glass); white-space: nowrap; }
+    .prompt-chip { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); color: var(--text-secondary); font-size: 0.72rem; padding: 5px 10px; border-radius: var(--radius-full); cursor: pointer; flex-shrink: 0; }
     .ai-chat-messages { flex: 1; padding: 18px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
     .chat-message { display: flex; gap: 10px; font-size: 0.84rem; }
     .chat-message.user { flex-direction: row-reverse; }
@@ -710,64 +672,27 @@
     .message-content { background: rgba(255, 255, 255, 0.04); padding: 12px 14px; border-radius: var(--radius-md); max-width: 82%; line-height: 1.5; border: 1px solid var(--border-glass); word-break: break-word; }
     .chat-message.user .message-content { background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); }
 
-    .ai-action-runbook-card {
-      margin-top: 10px;
-      padding: 10px 12px;
-      background: rgba(56, 189, 248, 0.08);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      border-radius: var(--radius-md);
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .ai-runbook-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 0.76rem;
-      font-weight: 700;
-      color: var(--accent-cyan);
-    }
-    .ai-runbook-btn {
-      align-self: flex-start;
-      background: var(--accent-cyan);
-      color: #000;
-      font-size: 0.76rem;
-      font-weight: 700;
-      border: none;
-      border-radius: var(--radius-sm);
-      padding: 5px 12px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .ai-runbook-btn:hover { background: #7dd3fc; }
-
     .ai-input-wrapper { padding: 16px 20px; border-top: 1px solid var(--border-glass); }
     .input-form { display: flex; gap: 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-glass); border-radius: var(--radius-md); padding: 6px 8px; }
     .input-form textarea { flex: 1; background: transparent; border: none; color: #fff; font-family: var(--font-sans); font-size: 0.84rem; resize: none; outline: none; }
     .send-btn { background: var(--accent-cyan); border: none; color: #000; width: 36px; height: 36px; border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center; justify-content: center; align-self: flex-end; flex-shrink: 0; }
-    .send-btn:hover { background: #7dd3fc; }
-    .input-footer-note { font-size: 0.68rem; color: var(--text-muted); margin-top: 6px; text-align: center; }
 
     /* WORKSPACE STYLES */
     .workspace-header-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding-bottom: 4px; }
     .workspace-title-group { display: flex; align-items: center; gap: 12px; }
     .workspace-badge-icon { width: 44px; height: 44px; border-radius: var(--radius-md); background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2)); border: 1px solid rgba(56, 189, 248, 0.4); display: flex; align-items: center; justify-content: center; color: var(--accent-cyan); }
-    .workspace-main-title { font-size: 1.28rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+    .workspace-main-title { font-size: 1.28rem; font-weight: 700; color: var(--text-primary); }
     .workspace-subtitle { font-size: 0.8rem; color: var(--text-muted); }
-    .workspace-subtabs-nav { display: flex; gap: 8px; background: rgba(14, 21, 38, 0.7); padding: 6px; border-radius: var(--radius-lg); border: 1px solid var(--border-glass); overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .workspace-tab-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: none; background: transparent; color: var(--text-secondary); font-size: 0.84rem; font-weight: 500; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease; white-space: nowrap; }
-    .workspace-tab-btn:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
-    .workspace-tab-btn.active { background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.15)); color: var(--accent-cyan); border: 1px solid rgba(56, 189, 248, 0.35); box-shadow: 0 0 15px rgba(56, 189, 248, 0.15); }
+    .workspace-subtabs-nav { display: flex; gap: 8px; background: rgba(14, 21, 38, 0.7); padding: 6px; border-radius: var(--radius-lg); border: 1px solid var(--border-glass); overflow-x: auto; }
+    .workspace-tab-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: none; background: transparent; color: var(--text-secondary); font-size: 0.84rem; font-weight: 500; border-radius: var(--radius-md); cursor: pointer; white-space: nowrap; }
+    .workspace-tab-btn.active { background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.15)); color: var(--accent-cyan); border: 1px solid rgba(56, 189, 248, 0.35); }
     .workspace-panel { display: none; flex-direction: column; gap: 20px; }
     .workspace-panel.active { display: flex; }
     .workspace-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
     .workspace-stat-card { padding: 20px; display: flex; flex-direction: column; gap: 8px; }
 
     .servers-fleet-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; width: 100%; }
-    .server-fleet-card { padding: 20px; display: flex; flex-direction: column; gap: 16px; position: relative; }
+    .server-fleet-card { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
     .server-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     .server-identity-wrap { display: flex; align-items: center; gap: 12px; }
     .server-node-avatar { width: 42px; height: 42px; border-radius: var(--radius-md); background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); display: flex; align-items: center; justify-content: center; color: var(--accent-cyan); flex-shrink: 0; }
@@ -777,20 +702,18 @@
     .server-metric-labels { display: flex; align-items: center; justify-content: space-between; font-size: 0.76rem; }
     .server-info-matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: var(--radius-md); padding: 12px; font-size: 0.78rem; }
     .server-info-item { display: flex; flex-direction: column; gap: 2px; }
-    .server-info-title { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .server-info-title { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; }
     .server-info-val { font-family: var(--font-mono); color: var(--text-primary); }
     .server-actions-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
 
     .models-hub-card, .deployments-hub-card, .activity-ledger-card { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
     .models-pull-bar { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: var(--radius-md); padding: 12px 16px; flex-wrap: wrap; }
     .models-pull-input { flex: 1; min-width: 220px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-glass); border-radius: var(--radius-sm); padding: 8px 14px; color: #fff; font-size: 0.84rem; font-family: var(--font-mono); outline: none; }
-    .models-pull-input:focus { border-color: var(--border-focus); }
     .model-status-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 0.74rem; font-weight: 600; padding: 4px 10px; border-radius: var(--radius-full); }
     .model-status-badge.in-memory { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
     .model-status-badge.idle { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); }
     .activity-filter-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
-    /* Spin Animation */
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .spin { animation: spin 0.8s linear infinite; }
 
@@ -841,7 +764,6 @@
           <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i>
         </button>
       </form>
-
       <div class="auth-footer-note">CloudOps Production Infrastructure • IAM Gated</div>
     </div>
   </div>
@@ -1043,7 +965,6 @@
               </div>
             </div>
 
-            <!-- AWS CLOUDWATCH FLEET METRIC CARD -->
             <div class="card glass-card insight-card">
               <div class="insight-header">
                 <span class="insight-label">CLOUDWATCH FLEET CPU</span>
@@ -1092,9 +1013,6 @@
                   <h3>Active Anomaly Feed</h3>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <button class="action-btn" id="simulateAnomalyBtn" onclick="triggerSimulation()" style="padding: 3px 8px; font-size: 0.72rem; border-color: var(--accent-rose); color: var(--accent-rose); cursor: pointer;">
-                    <i data-lucide="flame" style="width: 12px; height: 12px;"></i> Simulate Alert
-                  </button>
                   <span class="badge-status-pill" id="anomalyCountPill">0 Detected</span>
                 </div>
               </div>
@@ -1107,7 +1025,6 @@
               </div>
             </div>
 
-            <!-- INCIDENT RESPONSE & REMEDIATION TIMELINE -->
             <div class="card glass-card incident-card" style="margin-top: 16px;">
               <div class="card-header">
                 <div class="card-title-wrap">
@@ -1194,7 +1111,6 @@
             </div>
           </div>
 
-          <!-- SUB-NAVIGATION TABS -->
           <div class="workspace-subtabs-nav">
             <button class="workspace-tab-btn active" data-workspace-tab="overview">
               <i data-lucide="layout-grid" style="width: 15px; height: 15px;"></i>
@@ -1219,7 +1135,6 @@
           </div>
         </div>
 
-        <!-- TAB 1: OVERVIEW -->
         <div class="workspace-panel active" id="workspace-panel-overview">
           <div class="workspace-stat-grid">
             <div class="card glass-card workspace-stat-card">
@@ -1253,12 +1168,11 @@
               <span class="pulse-badge">● Live Simulation Active</span>
             </div>
             <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
-              Welcome to the <strong>AI Infrastructure Digital Twin</strong>. This central control center provides real-time 3D/2D architecture visualization, interactive node inspection drawers, and AI-driven What-If impact simulations.
+              Welcome to the <strong>AI Infrastructure Digital Twin</strong>. This central control center provides real-time architecture visualization, interactive inspection drawers, and AI-driven simulations.
             </p>
           </div>
         </div>
 
-        <!-- TAB 2: SERVER FLEET -->
         <div class="workspace-panel" id="workspace-panel-servers">
           <div class="servers-fleet-grid" id="workspaceServersContainer">
             <div class="card glass-card" style="padding: 24px; grid-column: 1 / -1; text-align: center;">
@@ -1267,16 +1181,14 @@
           </div>
         </div>
 
-        <!-- TAB 3: AI MODEL HUB -->
         <div class="workspace-panel" id="workspace-panel-models">
           <div class="card glass-card models-hub-card">
-            
             <div class="models-pull-bar">
               <div style="display: flex; align-items: center; gap: 8px;">
                 <i data-lucide="download-cloud" class="text-cyan" style="width: 20px; height: 20px;"></i>
                 <span style="font-size: 0.84rem; font-weight: 600;">Pull Model from Registry:</span>
               </div>
-              <input type="text" id="modelPullInput" class="models-pull-input" placeholder="e.g. qwen2.5-coder:0.5b, deepseek-r1:1.5b...">
+              <input type="text" id="modelPullInput" class="models-pull-input" placeholder="e.g. qwen2.5-coder:0.5b...">
               <button class="action-btn" id="modelPullBtn" style="padding: 8px 16px; font-size: 0.82rem;">
                 <i data-lucide="download" style="width: 14px; height: 14px;"></i>
                 <span>Pull Model</span>
@@ -1302,11 +1214,9 @@
                 </tbody>
               </table>
             </div>
-
           </div>
         </div>
 
-        <!-- TAB 4: DEPLOYMENTS -->
         <div class="workspace-panel" id="workspace-panel-deployments">
           <div class="card glass-card deployments-hub-card">
             <div class="card-header" style="padding: 0 0 16px 0; margin-bottom: 8px;">
@@ -1339,7 +1249,6 @@
           </div>
         </div>
 
-        <!-- TAB 5: ACTIVITY LEDGER -->
         <div class="workspace-panel" id="workspace-panel-activity">
           <div class="card glass-card activity-ledger-card">
             <div class="card-header" style="padding: 0 0 16px 0; margin-bottom: 8px;">
@@ -1383,21 +1292,20 @@
 
       <!-- VIEW: DETAILED RESOURCE VIEWS -->
       <section id="view-resources" class="content-view">
-        <div class="view-header">
+        <div class="view-header" style="display: flex; align-items: center; justify-content: space-between;">
           <div>
             <h2 id="resourceViewTitle">AWS Resources</h2>
-            <p id="resourceViewSubtitle">Inspect cloud infrastructure instances and configurations</p>
+            <p id="resourceViewSubtitle" style="color: var(--text-muted);">Inspect cloud infrastructure instances and configurations</p>
           </div>
           <button class="action-btn" id="backToDashBtn">
-            <i data-lucide="arrow-left"></i>
+            <i data-lucide="arrow-left" style="width: 16px; height: 16px;"></i>
             <span>Back to Overview</span>
           </button>
         </div>
 
-        <div class="card glass-card resource-table-card">
-          <div class="resource-filter-bar">
-            <input type="text" id="resourceFilterInput" class="filter-search-input" placeholder="Filter by Name, ID, or Region...">
-            <div class="filter-stats" id="resourceCountDisplay">Showing 0 items</div>
+        <div class="card glass-card resource-table-card" style="padding: 20px;">
+          <div class="resource-filter-bar" style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div class="filter-stats" id="resourceCountDisplay" style="font-size: 0.82rem; color: var(--text-secondary);">Showing 0 items</div>
           </div>
           <div class="table-responsive">
             <table class="data-table" id="genericResourceTable">
@@ -1419,9 +1327,7 @@
         </div>
         <button class="icon-close-btn" id="closeDtDrawerBtn"><i data-lucide="x"></i></button>
       </div>
-      <div class="dt-drawer-body" id="dtDrawerBody">
-        <!-- Injected via app.js -->
-      </div>
+      <div class="dt-drawer-body" id="dtDrawerBody"></div>
     </aside>
 
     <!-- WHAT-IF SIMULATION MODAL -->
@@ -1439,14 +1345,11 @@
         </div>
         <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border-glass); padding-top:14px;">
           <button class="action-btn" onclick="closeSimulationModal()">Cancel Simulation</button>
-          <button class="action-btn" id="executeSimulationBtn" style="background:var(--accent-amber); color:#000; font-weight:700;">
-            Execute Action in Production
-          </button>
         </div>
       </div>
     </div>
 
-    <!-- FLOATING AI SRE ASSISTANT BOT WIDGET -->
+    <!-- FLOATING AI SRE ASSISTANT BOT WIDGET (PRESERVED & SAFE) -->
     <div class="floating-ai-widget" id="toggleAiPanelBtn" title="Open AI SRE Assistant">
       <div class="floating-ai-avatar">
         <i data-lucide="bot"></i>
@@ -1474,15 +1377,9 @@
       </div>
 
       <div class="ai-prompts-slider">
-        <button class="prompt-chip" data-prompt="What happens if I stop the Ollama server?">
-          🧪 Simulate Ollama Outage
-        </button>
-        <button class="prompt-chip" data-prompt="Analyze current cluster load and verify node health.">
-          📊 Twin Health Audit
-        </button>
-        <button class="prompt-chip" data-prompt="Can you restart nginx?">
-          🔄 Restart Nginx Proxy
-        </button>
+        <button class="prompt-chip" data-prompt="What happens if I stop the Ollama server?">🧪 Simulate Ollama Outage</button>
+        <button class="prompt-chip" data-prompt="Analyze current cluster load and verify node health.">📊 Twin Health Audit</button>
+        <button class="prompt-chip" data-prompt="Can you restart nginx?">🔄 Restart Nginx Proxy</button>
       </div>
 
       <div class="ai-chat-messages" id="aiChatMessages">
@@ -1490,8 +1387,6 @@
           <div class="message-avatar"><i data-lucide="bot"></i></div>
           <div class="message-content">
             Hello! I am your <strong>AI Infrastructure Digital Twin Assistant</strong>. I am linked directly to your architecture nodes, live metrics, and simulation engine.
-            <br><br>
-            Ask me questions like <em>"What happens if I stop Ollama?"</em> or request service runbooks.
           </div>
         </div>
       </div>
@@ -1509,26 +1404,7 @@
 
   </div>
 
-  <!-- MODAL: NODE DETAIL INSPECTOR -->
-  <div class="modal-overlay" id="nodeModal">
-    <div class="modal-card glass-card">
-      <div class="modal-header">
-        <div class="modal-title-box">
-          <i data-lucide="layers" class="text-blue"></i>
-          <h3 id="modalNodeTitle">Resource Inspection</h3>
-        </div>
-        <button class="icon-close-btn" id="closeNodeModalBtn"><i data-lucide="x"></i></button>
-      </div>
-      <div class="modal-body" id="modalNodeContent"></div>
-      <div class="modal-footer">
-        <button class="action-btn" id="modalCloseBtn">Close</button>
-        <button class="action-btn ai-action-btn" id="modalAiDiagnoseBtn">
-          <i data-lucide="sparkles"></i>
-          <span>Diagnose with AI</span>
-        </button>
-      </div>
-    </div>
-  </div>
+  <!-- NOTE: The unwanted bottom Resource Inspection modal (#nodeModal) has been completely removed. -->
 
   <script src="/static/app.js"></script> 
 </body>
