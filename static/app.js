@@ -816,7 +816,7 @@ window.closeSimulationModal = function() {
 };
 
 // -----------------------------------------------------------------------------
-// AI SRE Assistant with Full SRE Runbook & Simulation Engine
+// AI SRE Assistant with Two-Way UI Synchronization Support
 // -----------------------------------------------------------------------------
 async function sendAiMessage() {
   const text = elements.aiChatInput.value.trim();
@@ -849,6 +849,22 @@ async function sendAiMessage() {
 
     const replyContent = data.reply || 'No response returned from the assistant.';
     
+    // Two-Way UI Synchronization Handler
+    if (data.ui_action) {
+      if (data.ui_action.type === 'REFRESH_DASHBOARD') {
+        dispatchGlobalRefresh();
+      } else if (data.ui_action.type === 'FILTER_LOGS') {
+        const levelSelect = document.getElementById('logLevelFilter');
+        if (levelSelect) {
+          levelSelect.value = data.ui_action.level || 'ALL';
+          renderLogs();
+        }
+      } else if (data.ui_action.type === 'CLEAR_LOGS') {
+        state.logs = [];
+        renderLogs();
+      }
+    }
+
     let runbookActionHtml = '';
     const lowerP = text.toLowerCase();
 
@@ -929,7 +945,7 @@ function appendLoadingMessage() {
   msgDiv.innerHTML = `
     <div class="message-avatar"><i data-lucide="bot"></i></div>
     <div class="message-content" style="color:var(--text-muted);">
-      <em>Analyzing digital twin topology & cascading impact...</em>
+      <em>Agent tool execution & reasoning in progress...</em>
     </div>
   `;
   elements.aiChatMessages.appendChild(msgDiv);
