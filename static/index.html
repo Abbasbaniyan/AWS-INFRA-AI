@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AWS Infrastructure AI Assistant | CloudOps Control Plane</title>
+  <title>AI Infrastructure Digital Twin | CloudOps Control Plane</title>
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,16 +11,6 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    .ai-prompts-slider::-webkit-scrollbar {
-      height: 4px;
-    }
-    .ai-prompts-slider::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    .ai-prompts-slider::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 4px;
-    }
     :root {
       --bg-base: #070b14;
       --bg-surface: #0e1526;
@@ -294,7 +284,7 @@
     .cluster-name { font-size: 0.8rem; font-weight: 600; }
     .cluster-ping { font-size: 0.7rem; color: var(--text-muted); }
 
-    /* Top Bar */
+    /* Top Bar & Professional Control System Styling */
     .main-wrapper {
       flex: 1;
       display: flex;
@@ -340,22 +330,33 @@
     }
 
     .header-actions { display: flex; align-items: center; gap: 14px; }
+    
+    /* Polished Professional Action Button (Refresh) */
     .action-btn {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       padding: 8px 16px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid var(--border-glass);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+      border: 1px solid rgba(56, 189, 248, 0.25);
       color: var(--text-primary);
       border-radius: var(--radius-md);
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 500;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       white-space: nowrap;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     }
-    .action-btn:hover { background: rgba(255, 255, 255, 0.1); }
+    .action-btn:hover {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(56, 189, 248, 0.05));
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+      transform: translateY(-1px);
+    }
+    .action-btn:active { transform: translateY(0); }
+
     .user-profile-badge { display: flex; align-items: center; gap: 10px; padding-left: 10px; border-left: 1px solid var(--border-glass); }
     .avatar {
       width: 34px;
@@ -419,10 +420,7 @@
       color: #fff;
       box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
     }
-    .floating-ai-avatar svg {
-      width: 22px;
-      height: 22px;
-    }
+    .floating-ai-avatar svg { width: 22px; height: 22px; }
     .floating-ai-badge {
       position: absolute;
       top: -1px;
@@ -434,11 +432,7 @@
       border-radius: var(--radius-full);
       box-shadow: 0 0 8px var(--accent-emerald);
     }
-    .floating-ai-text {
-      display: flex;
-      flex-direction: column;
-      text-align: left;
-    }
+    .floating-ai-text { display: flex; flex-direction: column; text-align: left; }
     .floating-ai-title {
       font-size: 0.86rem;
       font-weight: 700;
@@ -448,11 +442,7 @@
       gap: 4px;
       letter-spacing: -0.01em;
     }
-    .floating-ai-subtitle {
-      font-size: 0.68rem;
-      color: var(--accent-cyan);
-      font-weight: 500;
-    }
+    .floating-ai-subtitle { font-size: 0.68rem; color: var(--accent-cyan); font-weight: 500; }
 
     /* Dashboard Layout */
     .content-view { display: none; padding: 24px 28px; flex-direction: column; gap: 24px; }
@@ -506,16 +496,87 @@
     .bg-emerald { background: var(--accent-emerald); }
     .uptime-badge { font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; margin-top: 10px; }
 
-    /* Topology */
+    /* Topology (Digital Twin Canvas) */
     .map-controls { display: flex; gap: 6px; }
     .map-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-glass); color: var(--text-secondary); padding: 5px 8px; border-radius: var(--radius-sm); cursor: pointer; }
     .map-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
-    .topology-canvas-container { background: radial-gradient(#1e293b 1px, transparent 1px); background-size: 16px 16px; background-color: rgba(6, 10, 20, 0.8); overflow: hidden; }
+    .topology-canvas-container { background: radial-gradient(#1e293b 1px, transparent 1px); background-size: 16px 16px; background-color: rgba(6, 10, 20, 0.8); overflow: hidden; position: relative; }
     .topology-node { cursor: pointer; transition: transform 0.2s ease; }
-    .topology-node:hover { filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.6)); }
-    .topology-footer { padding: 10px 18px; font-size: 0.74rem; color: var(--text-muted); border-top: 1px solid var(--border-glass); }
+    .topology-node:hover { filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.8)); transform: scale(1.08); }
+    .topology-footer { padding: 10px 18px; font-size: 0.74rem; color: var(--text-muted); border-top: 1px solid var(--border-glass); display: flex; align-items: center; justify-content: space-between; }
 
-    /* Anomalies */
+    /* DIGITAL TWIN DRILL-DOWN INSPECTION DRAWER */
+    .digital-twin-drawer {
+      position: fixed;
+      top: 0;
+      right: -480px;
+      width: 460px;
+      max-width: 100vw;
+      height: 100vh;
+      background: rgba(11, 17, 33, 0.98);
+      border-left: 1px solid rgba(56, 189, 248, 0.35);
+      box-shadow: -20px 0 50px rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .digital-twin-drawer.open { right: 0; }
+    .dt-drawer-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--border-glass);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dt-drawer-body {
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex: 1;
+    }
+    .dt-section-title {
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+    .dt-action-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    /* WHAT-IF SIMULATION MODAL */
+    .simulation-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .simulation-modal-overlay.open { display: flex; }
+    .simulation-modal-card {
+      width: 520px;
+      max-width: 100%;
+      background: rgba(14, 21, 38, 0.95);
+      border: 1px solid var(--accent-amber);
+      box-shadow: 0 25px 50px rgba(0,0,0,0.9), 0 0 30px rgba(245, 158, 11, 0.25);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Anomalies & Consoles */
     .anomalies-list { padding: 12px; display: flex; flex-direction: column; gap: 10px; max-height: 360px; overflow-y: auto; }
     .anomaly-item { padding: 12px 14px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 6px; }
     .anomaly-item.critical { border-left: 3px solid var(--accent-rose); background: rgba(239, 68, 68, 0.05); }
@@ -556,6 +617,63 @@
     .log-lvl.CRITICAL { color: var(--accent-rose); font-weight: 700; }
     .log-src { color: var(--accent-purple); }
     .log-msg { color: var(--text-secondary); word-break: break-all; }
+
+    /* Sleek Professional Log Toolbar Controls (Dropdown & Trash) */
+    .log-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .log-filter-select {
+      background: rgba(7, 11, 20, 0.9);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      font-weight: 500;
+      padding: 6px 32px 6px 12px;
+      border-radius: var(--radius-md);
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      transition: all 0.2s ease;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
+    .log-filter-select:hover, .log-filter-select:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
+    .log-filter-select option {
+      background-color: #0e1526;
+      color: #f8fafc;
+      padding: 8px;
+    }
+    .icon-action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-glass);
+      color: var(--text-secondary);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .icon-action-btn:hover {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: var(--accent-rose);
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+      transform: translateY(-1px);
+    }
+    .icon-action-btn svg { width: 15px; height: 15px; }
 
     /* Slide-out AI Panel */
     .ai-assistant-panel {
@@ -624,9 +742,7 @@
       align-items: center;
       gap: 6px;
     }
-    .ai-runbook-btn:hover {
-      background: #7dd3fc;
-    }
+    .ai-runbook-btn:hover { background: #7dd3fc; }
 
     .ai-input-wrapper { padding: 16px 20px; border-top: 1px solid var(--border-glass); }
     .input-form { display: flex; gap: 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-glass); border-radius: var(--radius-md); padding: 6px 8px; }
@@ -635,380 +751,53 @@
     .send-btn:hover { background: #7dd3fc; }
     .input-footer-note { font-size: 0.68rem; color: var(--text-muted); margin-top: 6px; text-align: center; }
 
-    /* Modals */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 100; }
-    .modal-overlay.open { display: flex; }
-    .modal-card { width: 520px; max-width: 90vw; background: var(--bg-surface); }
-    .modal-header { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-glass); }
-    .modal-body { padding: 20px; font-size: 0.88rem; }
-    .modal-footer { padding: 14px 20px; border-top: 1px solid var(--border-glass); display: flex; justify-content: flex-end; gap: 10px; }
-    .icon-close-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; }
-    .icon-close-btn:hover { color: #fff; }
+    /* WORKSPACE STYLES */
+    .workspace-header-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding-bottom: 4px; }
+    .workspace-title-group { display: flex; align-items: center; gap: 12px; }
+    .workspace-badge-icon { width: 44px; height: 44px; border-radius: var(--radius-md); background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2)); border: 1px solid rgba(56, 189, 248, 0.4); display: flex; align-items: center; justify-content: center; color: var(--accent-cyan); }
+    .workspace-main-title { font-size: 1.28rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+    .workspace-subtitle { font-size: 0.8rem; color: var(--text-muted); }
+    .workspace-subtabs-nav { display: flex; gap: 8px; background: rgba(14, 21, 38, 0.7); padding: 6px; border-radius: var(--radius-lg); border: 1px solid var(--border-glass); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .workspace-tab-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: none; background: transparent; color: var(--text-secondary); font-size: 0.84rem; font-weight: 500; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease; white-space: nowrap; }
+    .workspace-tab-btn:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+    .workspace-tab-btn.active { background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.15)); color: var(--accent-cyan); border: 1px solid rgba(56, 189, 248, 0.35); box-shadow: 0 0 15px rgba(56, 189, 248, 0.15); }
+    .workspace-panel { display: none; flex-direction: column; gap: 20px; }
+    .workspace-panel.active { display: flex; }
+    .workspace-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .workspace-stat-card { padding: 20px; display: flex; flex-direction: column; gap: 8px; }
 
-    /* WORKSPACE SHELL & SUB-NAVIGATION STYLES */
-    .workspace-header-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 16px;
-      padding-bottom: 4px;
-    }
-    .workspace-title-group {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .workspace-badge-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: var(--radius-md);
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2));
-      border: 1px solid rgba(56, 189, 248, 0.4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--accent-cyan);
-    }
-    .workspace-main-title {
-      font-size: 1.28rem;
-      font-weight: 700;
-      color: var(--text-primary);
-      letter-spacing: -0.01em;
-    }
-    .workspace-subtitle {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-    }
-    .workspace-subtabs-nav {
-      display: flex;
-      gap: 8px;
-      background: rgba(14, 21, 38, 0.7);
-      padding: 6px;
-      border-radius: var(--radius-lg);
-      border: 1px solid var(--border-glass);
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    .workspace-tab-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
-      border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      font-size: 0.84rem;
-      font-weight: 500;
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      white-space: nowrap;
-    }
-    .workspace-tab-btn:hover {
-      color: var(--text-primary);
-      background: rgba(255, 255, 255, 0.05);
-    }
-    .workspace-tab-btn.active {
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.15));
-      color: var(--accent-cyan);
-      border: 1px solid rgba(56, 189, 248, 0.35);
-      box-shadow: 0 0 15px rgba(56, 189, 248, 0.15);
-    }
-    .workspace-panel {
-      display: none;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .workspace-panel.active {
-      display: flex;
-    }
-    .workspace-stat-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-    }
-    .workspace-stat-card {
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
+    .servers-fleet-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; width: 100%; }
+    .server-fleet-card { padding: 20px; display: flex; flex-direction: column; gap: 16px; position: relative; }
+    .server-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .server-identity-wrap { display: flex; align-items: center; gap: 12px; }
+    .server-node-avatar { width: 42px; height: 42px; border-radius: var(--radius-md); background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); display: flex; align-items: center; justify-content: center; color: var(--accent-cyan); flex-shrink: 0; }
+    .server-node-name { font-size: 0.96rem; font-weight: 700; color: var(--text-primary); }
+    .server-node-role { font-size: 0.75rem; color: var(--text-muted); }
+    .server-metric-row { display: flex; flex-direction: column; gap: 6px; }
+    .server-metric-labels { display: flex; align-items: center; justify-content: space-between; font-size: 0.76rem; }
+    .server-info-matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: var(--radius-md); padding: 12px; font-size: 0.78rem; }
+    .server-info-item { display: flex; flex-direction: column; gap: 2px; }
+    .server-info-title { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .server-info-val { font-family: var(--font-mono); color: var(--text-primary); }
+    .server-actions-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
 
-    /* SERVER FLEET CARD GRID STYLES */
-    .servers-fleet-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-      gap: 20px;
-      width: 100%;
-    }
-    .server-fleet-card {
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      position: relative;
-    }
-    .server-card-top {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .server-identity-wrap {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .server-node-avatar {
-      width: 42px;
-      height: 42px;
-      border-radius: var(--radius-md);
-      background: rgba(56, 189, 248, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--accent-cyan);
-      flex-shrink: 0;
-    }
-    .server-node-name {
-      font-size: 0.96rem;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-    .server-node-role {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-    .server-metric-row {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .server-metric-labels {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 0.76rem;
-    }
-    .server-info-matrix {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid var(--border-glass);
-      border-radius: var(--radius-md);
-      padding: 12px;
-      font-size: 0.78rem;
-    }
-    .server-info-item {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .server-info-title {
-      font-size: 0.68rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .server-info-val {
-      font-family: var(--font-mono);
-      color: var(--text-primary);
-    }
-    .server-actions-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-top: 4px;
-    }
-
-    /* AI MODEL HUB STYLES */
-    .models-hub-card {
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .models-pull-bar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid var(--border-glass);
-      border-radius: var(--radius-md);
-      padding: 12px 16px;
-      flex-wrap: wrap;
-    }
-    .models-pull-input {
-      flex: 1;
-      min-width: 220px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-glass);
-      border-radius: var(--radius-sm);
-      padding: 8px 14px;
-      color: #fff;
-      font-size: 0.84rem;
-      font-family: var(--font-mono);
-      outline: none;
-    }
-    .models-pull-input:focus {
-      border-color: var(--border-focus);
-    }
-    .model-status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.74rem;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: var(--radius-full);
-    }
-    .model-status-badge.in-memory {
-      background: rgba(16, 185, 129, 0.15);
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.3);
-    }
-    .model-status-badge.idle {
-      background: rgba(148, 163, 184, 0.12);
-      color: #94a3b8;
-      border: 1px solid rgba(148, 163, 184, 0.2);
-    }
-
-    /* DEPLOYMENTS & ACTIVITY LEDGER STYLES (PHASE 5 & 6) */
-    .deployments-hub-card,
-    .activity-ledger-card {
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .activity-filter-bar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    /* Color Classes */
-    .text-cyan { color: var(--accent-cyan); }
-    .text-blue { color: var(--accent-blue); }
-    .text-indigo { color: var(--accent-indigo); }
-    .text-purple { color: var(--accent-purple); }
-    .text-emerald { color: var(--accent-emerald); }
-    .text-amber { color: var(--accent-amber); }
-    .text-rose { color: var(--accent-rose); }
+    .models-hub-card, .deployments-hub-card, .activity-ledger-card { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+    .models-pull-bar { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: var(--radius-md); padding: 12px 16px; flex-wrap: wrap; }
+    .models-pull-input { flex: 1; min-width: 220px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-glass); border-radius: var(--radius-sm); padding: 8px 14px; color: #fff; font-size: 0.84rem; font-family: var(--font-mono); outline: none; }
+    .models-pull-input:focus { border-color: var(--border-focus); }
+    .model-status-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 0.74rem; font-weight: 600; padding: 4px 10px; border-radius: var(--radius-full); }
+    .model-status-badge.in-memory { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .model-status-badge.idle { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); }
+    .activity-filter-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
     /* Spin Animation */
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    .spin {
-      animation: spin 0.8s linear infinite;
-    }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.8s linear infinite; }
 
-    /* RESPONSIVE BREAKPOINTS */
     @media (max-width: 1280px) {
-      .quick-insights-container {
-        grid-template-columns: repeat(3, 1fr);
-      }
-      .dashboard-grid-top {
-        grid-template-columns: 1fr;
-      }
-      .workspace-stat-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    @media (max-width: 1024px) {
-      .dashboard-grid-middle,
-      .dashboard-grid-bottom {
-        grid-template-columns: 1fr;
-      }
-      .quick-insights-container {
-        grid-template-columns: repeat(2, 1fr);
-      }
-      .top-navbar {
-        padding: 0 16px;
-      }
-      .content-view {
-        padding: 16px;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .app-layout {
-        flex-direction: column;
-        height: 100vh;
-        overflow: hidden;
-      }
-      .sidebar {
-        width: 100%;
-        min-width: 100%;
-        height: auto;
-        border-right: none;
-        border-bottom: 1px solid var(--border-glass);
-      }
-      .sidebar-nav {
-        flex-direction: row;
-        overflow-x: auto;
-        padding: 8px 12px;
-        white-space: nowrap;
-        -webkit-overflow-scrolling: touch;
-      }
-      .sidebar-nav .nav-section-title,
-      .sidebar-footer {
-        display: none;
-      }
-      .nav-item {
-        width: auto;
-        padding: 8px 12px;
-      }
-      .nav-item.active {
-        border-left: none;
-        border-bottom: 2px solid var(--accent-cyan);
-      }
-      .top-navbar {
-        height: auto;
-        padding: 12px 16px;
-        flex-wrap: wrap;
-        gap: 10px;
-      }
-      .header-actions {
-        width: 100%;
-        justify-content: flex-end;
-      }
-      .quick-insights-container,
-      .workspace-stat-grid,
-      .servers-fleet-grid {
-        grid-template-columns: 1fr;
-      }
-      .health-gauge-container {
-        flex-direction: column;
-        text-align: center;
-      }
-      .health-counters-row {
-        justify-content: center;
-      }
-      .ai-assistant-panel {
-        width: 100vw;
-        right: -100vw;
-      }
-      .user-role {
-        display: none;
-      }
-      .floating-ai-widget {
-        bottom: 18px;
-        right: 18px;
-        padding: 6px 14px 6px 6px;
-      }
-      .floating-ai-avatar {
-        width: 38px;
-        height: 38px;
-      }
+      .quick-insights-container { grid-template-columns: repeat(3, 1fr); }
+      .dashboard-grid-top { grid-template-columns: 1fr; }
+      .workspace-stat-grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
@@ -1021,8 +810,8 @@
         <div class="auth-logo">
           <i data-lucide="shield-check" style="width: 28px; height: 28px;"></i>
         </div>
-        <h1 class="auth-title">AWS Infra AI Control Plane</h1>
-        <p class="auth-subtitle">Sign in to access cloud telemetry, metrics & AI SRE diagnostics</p>
+        <h1 class="auth-title">AI Infrastructure Digital Twin</h1>
+        <p class="auth-subtitle">Sign in to access cloud telemetry, 3D/2D topology & AI SRE agents</p>
       </div>
 
       <form id="loginForm" class="auth-form" onsubmit="handleLoginSubmit(event)">
@@ -1066,8 +855,8 @@
           <i data-lucide="cloud-cog" class="logo-icon"></i>
         </div>
         <div class="logo-text">
-          <span class="brand-title">AWS Infra AI</span>
-          <span class="brand-subtitle">CloudOps v2.4</span>
+          <span class="brand-title">AI Infra Twin</span>
+          <span class="brand-subtitle">CloudOps v3.5</span>
         </div>
       </div>
 
@@ -1079,7 +868,7 @@
         </button>
         <button class="nav-item" data-view="topology">
           <i data-lucide="network"></i>
-          <span>Infra Topology</span>
+          <span>Digital Twin Map</span>
         </button>
         <button class="nav-item" data-view="anomalies">
           <i data-lucide="alert-triangle"></i>
@@ -1091,7 +880,6 @@
           <span>Live Logs</span>
         </button>
 
-        <!-- WORKSPACE SECTION -->
         <div class="nav-section-title">WORKSPACE</div>
         <button class="nav-item" data-view="workspace">
           <i data-lucide="box"></i>
@@ -1139,7 +927,7 @@
       <!-- TOP HEADER BAR -->
       <header class="top-navbar">
         <div class="top-navbar-title">
-          <h2>Cloud Infrastructure Overview</h2>
+          <h2>Cloud Infrastructure Digital Twin</h2>
           <span class="header-region-tag">eu-north-1</span>
         </div>
 
@@ -1271,19 +1059,19 @@
 
         </div>
 
-        <!-- ROW 2: TOPOLOGY & ANOMALIES -->
+        <!-- ROW 2: DIGITAL TWIN TOPOLOGY & ANOMALIES -->
         <div class="dashboard-grid-middle">
           
           <div class="card glass-card map-card">
             <div class="card-header">
               <div class="card-title-wrap">
-                <i data-lucide="network" class="card-header-icon text-indigo"></i>
-                <h3>Interactive Infrastructure Topology</h3>
+                <i data-lucide="cpu" class="card-header-icon text-indigo"></i>
+                <h3>Interactive Digital Twin Architecture</h3>
               </div>
               <div class="map-controls">
-                <button class="map-btn" id="mapZoomIn" title="Zoom In"><i data-lucide="zoom-in"></i></button>
-                <button class="map-btn" id="mapZoomOut" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
-                <button class="map-btn" id="mapReset" title="Reset View"><i data-lucide="rotate-ccw"></i></button>
+                <button class="map-btn" onclick="openSimulationModal('ollama.service', 'stop')" title="What-If Simulation">
+                  <i data-lucide="flask-conical" style="width:14px; height:14px;"></i> Simulate What-If
+                </button>
               </div>
             </div>
             
@@ -1291,7 +1079,8 @@
               <svg id="topologySvg" class="topology-svg" width="100%" height="320"></svg>
             </div>
             <div class="topology-footer">
-              <span>Click any node to inspect telemetry and trigger AI diagnosis.</span>
+              <span>Click any node in the digital twin to open live telemetry & drill-down controls.</span>
+              <span class="badge-status-pill">● Twin Live Sync</span>
             </div>
           </div>
 
@@ -1379,7 +1168,9 @@
                   <option value="WARN">WARN</option>
                   <option value="CRITICAL">CRITICAL</option>
                 </select>
-                <button class="icon-action-btn" id="clearLogsBtn" title="Clear Console"><i data-lucide="trash-2"></i></button>
+                <button class="icon-action-btn" id="clearLogsBtn" title="Clear Console">
+                  <i data-lucide="trash-2"></i>
+                </button>
               </div>
             </div>
 
@@ -1457,12 +1248,12 @@
             <div class="card-header" style="padding: 0 0 16px 0; margin-bottom: 16px;">
               <div class="card-title-wrap">
                 <i data-lucide="sparkles" class="card-header-icon text-cyan"></i>
-                <h3>Workspace Central Dashboard</h3>
+                <h3>Digital Twin Operations Center</h3>
               </div>
-              <span class="pulse-badge">● Live Metrics Connected</span>
+              <span class="pulse-badge">● Live Simulation Active</span>
             </div>
             <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
-              Welcome to the <strong>AI Infrastructure Workspace</strong>. This central control center provides unified visibility across EC2 host instances, local Ollama model lifecycle, continuous service deployments, and AI-grounded infrastructure actions. Data across your server nodes and AI models is synchronized dynamically in real time.
+              Welcome to the <strong>AI Infrastructure Digital Twin</strong>. This central control center provides real-time 3D/2D architecture visualization, interactive node inspection drawers, and AI-driven What-If impact simulations.
             </p>
           </div>
         </div>
@@ -1548,7 +1339,7 @@
           </div>
         </div>
 
-        <!-- TAB 5: ACTIVITY LEDGER (PHASE 6 ACTIVE) -->
+        <!-- TAB 5: ACTIVITY LEDGER -->
         <div class="workspace-panel" id="workspace-panel-activity">
           <div class="card glass-card activity-ledger-card">
             <div class="card-header" style="padding: 0 0 16px 0; margin-bottom: 8px;">
@@ -1619,7 +1410,43 @@
 
     </main>
 
-    <!-- FLOATING AI SRE ASSISTANT BOT WIDGET (BOTTOM-RIGHT) -->
+    <!-- DIGITAL TWIN NODE DRILL-DOWN INSPECTION DRAWER -->
+    <aside class="digital-twin-drawer" id="digitalTwinDrawer">
+      <div class="dt-drawer-header">
+        <div class="card-title-wrap">
+          <i data-lucide="cpu" class="text-cyan"></i>
+          <h3 id="dtDrawerTitle">Node Inspection</h3>
+        </div>
+        <button class="icon-close-btn" id="closeDtDrawerBtn"><i data-lucide="x"></i></button>
+      </div>
+      <div class="dt-drawer-body" id="dtDrawerBody">
+        <!-- Injected via app.js -->
+      </div>
+    </aside>
+
+    <!-- WHAT-IF SIMULATION MODAL -->
+    <div class="simulation-modal-overlay" id="simulationModal">
+      <div class="simulation-modal-card">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <i data-lucide="flask-conical" class="text-amber" style="width:24px; height:24px;"></i>
+            <h3 style="font-size:1.1rem; font-weight:700;">AI What-If Simulation Mode</h3>
+          </div>
+          <button class="icon-close-btn" onclick="closeSimulationModal()"><i data-lucide="x"></i></button>
+        </div>
+        <div id="simulationModalContent" style="display:flex; flex-direction:column; gap:12px; font-size:0.86rem; color:var(--text-secondary);">
+          <p>Analyzing dependency tree and cascading failure risks...</p>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border-glass); padding-top:14px;">
+          <button class="action-btn" onclick="closeSimulationModal()">Cancel Simulation</button>
+          <button class="action-btn" id="executeSimulationBtn" style="background:var(--accent-amber); color:#000; font-weight:700;">
+            Execute Action in Production
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FLOATING AI SRE ASSISTANT BOT WIDGET -->
     <div class="floating-ai-widget" id="toggleAiPanelBtn" title="Open AI SRE Assistant">
       <div class="floating-ai-avatar">
         <i data-lucide="bot"></i>
@@ -1627,7 +1454,7 @@
       </div>
       <div class="floating-ai-text">
         <span class="floating-ai-title">AI Assistant <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--accent-cyan);"></i></span>
-        <span class="floating-ai-subtitle">SRE Live Diagnostics</span>
+        <span class="floating-ai-subtitle">SRE Digital Twin</span>
       </div>
     </div>
 
@@ -1640,24 +1467,21 @@
           </div>
           <div>
             <h3 class="ai-name">CloudOps AI SRE</h3>
-            <span class="ai-status"><span class="status-dot"></span> Live Telemetry Context Enabled</span>
+            <span class="ai-status"><span class="status-dot"></span> Digital Twin Grounded</span>
           </div>
         </div>
         <button class="icon-close-btn" id="closeAiPanelBtn"><i data-lucide="x"></i></button>
       </div>
 
       <div class="ai-prompts-slider">
-        <button class="prompt-chip" data-prompt="Analyze my current CPU, Memory, and Disk usage and provide optimization steps.">
-          📊 Analyze System Load
+        <button class="prompt-chip" data-prompt="What happens if I stop the Ollama server?">
+          🧪 Simulate Ollama Outage
         </button>
-        <button class="prompt-chip" data-prompt="Diagnose active anomalies and give me mitigation shell commands.">
-          ⚠️ Diagnose Anomalies
+        <button class="prompt-chip" data-prompt="Analyze current cluster load and verify node health.">
+          📊 Twin Health Audit
         </button>
-        <button class="prompt-chip" data-prompt="Generate an AWS CLI script to check EC2 health checks and restart stopped instances.">
-          🤖 EC2 Recovery Script
-        </button>
-        <button class="prompt-chip" data-prompt="What are the best practices to secure S3 buckets and IAM roles?">
-          🔒 S3/IAM Security Audit
+        <button class="prompt-chip" data-prompt="Can you restart nginx?">
+          🔄 Restart Nginx Proxy
         </button>
       </div>
 
@@ -1665,21 +1489,21 @@
         <div class="chat-message assistant">
           <div class="message-avatar"><i data-lucide="bot"></i></div>
           <div class="message-content">
-            Hello! I am your <strong>AWS Infrastructure AI Assistant</strong>. I am linked directly to your live system metrics, anomaly engine, and topology map.
+            Hello! I am your <strong>AI Infrastructure Digital Twin Assistant</strong>. I am linked directly to your architecture nodes, live metrics, and simulation engine.
             <br><br>
-            Ask me to troubleshoot high resource usage, generate CloudFormation/Terraform scripts, or resolve server anomalies.
+            Ask me questions like <em>"What happens if I stop Ollama?"</em> or request service runbooks.
           </div>
         </div>
       </div>
 
       <div class="ai-input-wrapper">
         <div class="input-form">
-          <textarea id="aiChatInput" rows="2" placeholder="Ask AI to troubleshoot infrastructure, analyze logs, or write scripts..."></textarea>
+          <textarea id="aiChatInput" rows="2" placeholder="Ask AI to simulate outages, inspect nodes, or run runbooks..."></textarea>
           <button id="sendAiChatBtn" class="send-btn" title="Send (Enter)">
             <i data-lucide="send"></i>
           </button>
         </div>
-        <div class="input-footer-note">Press <strong>Enter</strong> to send • Context auto-injected from psutil</div>
+        <div class="input-footer-note">Press <strong>Enter</strong> to send • Digital Twin Telemetry Active</div>
       </div>
     </aside>
 
