@@ -117,7 +117,7 @@ function initLucide() {
   }
 }
 
-// Sparkline Canvas Renderer for CloudWatch metric card
+// Sparkline Canvas Renderer
 function drawSparkline(canvas, dataPoints) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -222,7 +222,7 @@ function startDataPolling() {
   dispatchGlobalRefresh();
 
   state.pollTimers.push(setInterval(fetchMetrics, 3000));
-  state.pollTimers.push(setInterval(fetchCloudWatchFleetMetrics, 10000));
+  state.pollTimers.push(setInterval(fetchCloudWatchFleetMetrics, 8000));
   state.pollTimers.push(setInterval(fetchAnomalies, 5000));
   state.pollTimers.push(setInterval(fetchLogs, 4000));
   state.pollTimers.push(setInterval(fetchWorkspaceSummary, 6000));
@@ -272,7 +272,6 @@ function updateDashboardUI(data) {
   const health = data.health || {};
   const net = data.network || {};
 
-  // 1. Health Score & Gauge Ring
   const healthScore = Number(health.score ?? 0);
   if (elements.healthScoreValue) elements.healthScoreValue.textContent = Math.round(healthScore);
   if (elements.healthStatusText) elements.healthStatusText.textContent = health.status || 'Optimal Baseline';
@@ -285,13 +284,11 @@ function updateDashboardUI(data) {
     elements.healthProgressRing.style.strokeDashoffset = offset;
   }
 
-  // 2. CPU Card
   const cpuPercent = Number(cpu.percent ?? 0);
   if (elements.cpuUsage) elements.cpuUsage.textContent = `${cpuPercent.toFixed(1)}%`;
   if (elements.cpuCores) elements.cpuCores.textContent = `${cpu.cores || 2} Cores`;
   if (elements.cpuProgressBar) elements.cpuProgressBar.style.width = `${Math.min(cpuPercent, 100)}%`;
 
-  // 3. Memory Card
   const memPercent = Number(memory.percent ?? 0);
   if (elements.memoryUsage) elements.memoryUsage.textContent = `${memPercent.toFixed(1)}%`;
   if (elements.memoryDetails) {
@@ -299,7 +296,6 @@ function updateDashboardUI(data) {
   }
   if (elements.memProgressBar) elements.memProgressBar.style.width = `${Math.min(memPercent, 100)}%`;
 
-  // 4. Root Disk Card
   const diskPercent = Number(disk.percent ?? 0);
   if (elements.diskUsage) elements.diskUsage.textContent = `${diskPercent.toFixed(1)}%`;
   if (elements.diskDetails) {
@@ -307,7 +303,6 @@ function updateDashboardUI(data) {
   }
   if (elements.diskProgressBar) elements.diskProgressBar.style.width = `${Math.min(diskPercent, 100)}%`;
 
-  // 5. Network I/O Card
   if (elements.networkRate) {
     const activeRate = (net.kb_recv_sec || 0) + (net.kb_sent_sec || 0);
     elements.networkRate.textContent = `${activeRate.toFixed(1)} KB/s`;
@@ -316,12 +311,9 @@ function updateDashboardUI(data) {
     elements.networkTotals.textContent = `↓ ${net.total_recv_mb ?? 0} MB | ↑ ${net.total_sent_mb ?? 0} MB`;
   }
 
-  // 6. Uptime
   if (elements.systemUptime) elements.systemUptime.textContent = uptime.formatted || '0h 0m';
 
-  // 7. Top Processes
   if (Array.isArray(data.top_processes)) renderProcesses(data.top_processes);
-
   state.metrics = data;
 }
 
@@ -353,6 +345,212 @@ async function fetchCloudWatchFleetMetrics() {
   } catch (err) {
     console.error('CloudWatch metrics fetch error:', err);
   }
+}
+
+// -----------------------------------------------------------------------------
+// Digital Twin Topology Map (Flicker-Free Anti-Glitch Engine)
+// -----------------------------------------------------------------------------
+async function fetchTopology() {
+  if (!state.isAuthenticated) return;
+  try {
+    const res = await fetch('/api/topology');
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    // Prevent re-rendering SVG if nodes haven't changed (stops flicker)
+    if (state.topology && JSON.stringify(state.topology) === JSON.stringify(data)) {
+      return;
+    }
+    state.topology = data;
+    renderTopology(data);
+  } catch (err) {
+    console.error('Topology fetch error:', err);
+  }
+}
+
+function renderTopology(topology) {
+  const svg = elements.topologySvg;
+  if (!svg || !topology) return;
+
+  const width = 680;
+  const height = 260;
+  const nodes = topology.nodes || [];
+  const links = topology.links || [];
+
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.style.overflow = 'visible';
+
+  let svgHtml = '<g id="topology-graph-root">';
+
+  // Draw background connection links
+  links.forEach(l => {
+    const sourceNode = nodes.find(n => n.id === l.source);
+    const targetNode = nodes.find(n => n.id === l.target);
+    if (sourceNode && targetNode) {
+      svgHtml += `<line x1="${sourceNode.x}" y1="${sourceNode.y}" x2="${targetNode.x}" y2="${targetNode.y}" stroke="rgba(56,189,248,0.35)" stroke-width="2.5" stroke-dasharray="6" style="pointer-events:none;"/>`;
+    }
+  });
+
+  // Draw nodes with an invisible hit-area circle to prevent flicker
+  nodes.forEach(n => {
+    svgHtml += `
+      <g class="topology-node" 
+         transform="translate(${n.x},${n.y})" 
+         onclick="inspectDigitalTwinNode('${n.id}')" 
+         style="cursor: pointer; pointer-events: bounding-box; transition: transform 0.2s ease;">
+        <!-- Invisible wide hit-box buffer prevents hover loop flicker -->
+        <circle r="38" fill="transparent" stroke="none" style="pointer-events: fill;" />
+        <!-- Visual node elements -->
+        <circle r="26" fill="#0b1329" stroke="#38bdf8" stroke-width="2.5" style="pointer-events: none;" />
+        <text text-anchor="middle" y="44" fill="#f8fafc" font-size="11" font-weight="700" font-family="var(--font-sans)" style="pointer-events: none; user-select: none;">${n.label}</text>
+        <circle r="6" fill="#10b981" cx="17" cy="-17" style="pointer-events: none;" />
+      </g>
+    `;
+  });
+
+  svgHtml += '</g>';
+  svg.innerHTML = svgHtml;
+  initLucide();
+}
+
+window.inspectDigitalTwinNode = function(nodeId) {
+  if (!state.topology || !state.topology.nodes) return;
+  const node = state.topology.nodes.find(n => n.id === nodeId);
+  if (!node) return;
+
+  const nodeLabel = node.label || node.id || 'Unknown Node';
+  if (elements.dtDrawerTitle) elements.dtDrawerTitle.textContent = `${nodeLabel} (${node.id})`;
+  if (elements.dtDrawerBody) {
+    elements.dtDrawerBody.innerHTML = `
+      <div>
+        <span class="dt-section-title">NODE TELEMETRY & HEALTH</span>
+        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-glass); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Operational Status</span><span class="health-pill healthy">● HEALTHY</span></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Architecture Type</span><code>${(node.type || 'service').toUpperCase()}</code></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">AWS Region</span><code>${node.region || 'eu-north-1'}</code></div>
+        </div>
+      </div>
+      <div>
+        <span class="dt-section-title">QUICK ACTIONS</span>
+        <div class="dt-action-grid">
+          <button class="action-btn" style="justify-content:center; font-size:0.78rem;" onclick="sendPromptToAi('Inspect telemetry for node ${nodeLabel}')">Ask AI</button>
+          <button class="action-btn" style="justify-content:center; font-size:0.78rem; border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="dispatchGlobalRefresh()">Sync Node</button>
+        </div>
+      </div>
+    `;
+  }
+  if (elements.digitalTwinDrawer) elements.digitalTwinDrawer.classList.add('open');
+};
+
+if (elements.closeDtDrawerBtn) {
+  elements.closeDtDrawerBtn.addEventListener('click', () => {
+    elements.digitalTwinDrawer.classList.remove('open');
+  });
+}
+
+// AI Assistant Integration
+async function sendAiMessage() {
+  const text = elements.aiChatInput.value.trim();
+  if (!text) return;
+
+  appendChatMessage('user', text);
+  elements.aiChatInput.value = '';
+  elements.aiChatInput.disabled = true;
+  elements.sendAiChatBtn.disabled = true;
+
+  const loadingId = appendLoadingMessage();
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        history: state.chatHistory,
+        include_system_context: true
+      })
+    });
+
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+
+    const data = await res.json();
+    removeMessageById(loadingId);
+
+    const replyContent = data.reply || 'Action executed successfully.';
+    if (data.ui_action) {
+      const action = data.ui_action;
+      if (action.type === 'REFRESH_DASHBOARD') dispatchGlobalRefresh();
+      else if (action.type === 'FILTER_LOGS') {
+        const levelSelect = document.getElementById('logLevelFilter');
+        if (levelSelect) { levelSelect.value = action.level || 'ALL'; renderLogs(); }
+      } else if (action.type === 'CLEAR_LOGS') { state.logs = []; renderLogs(); }
+      else if (action.type === 'NAVIGATE_VIEW') {
+        const navBtn = document.querySelector(`[data-view="${action.view}"]`);
+        if (navBtn) navBtn.click();
+      }
+    }
+
+    appendChatMessage('assistant', replyContent);
+    state.chatHistory.push({ role: 'user', content: text });
+    state.chatHistory.push({ role: 'assistant', content: replyContent });
+  } catch (err) {
+    console.error('Chat error:', err);
+    removeMessageById(loadingId);
+    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI agent.');
+  } finally {
+    elements.aiChatInput.disabled = false;
+    elements.sendAiChatBtn.disabled = false;
+    elements.aiChatInput.focus();
+  }
+}
+
+function appendChatMessage(role, content) {
+  const msgDiv = document.createElement('div');
+  msgDiv.className = `chat-message ${role}`;
+  msgDiv.innerHTML = `
+    <div class="message-avatar"><i data-lucide="${role === 'assistant' ? 'bot' : 'user'}"></i></div>
+    <div class="message-content">${formatMarkdown(content)}</div>
+  `;
+  elements.aiChatMessages.appendChild(msgDiv);
+  elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
+  initLucide();
+}
+
+function appendLoadingMessage() {
+  const id = 'loading-' + Date.now();
+  const msgDiv = document.createElement('div');
+  msgDiv.id = id;
+  msgDiv.className = 'chat-message assistant';
+  msgDiv.innerHTML = `
+    <div class="message-avatar"><i data-lucide="bot"></i></div>
+    <div class="message-content" style="color:var(--text-muted);"><em>Agent tool execution & verification in progress...</em></div>
+  `;
+  elements.aiChatMessages.appendChild(msgDiv);
+  elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
+  initLucide();
+  return id;
+}
+
+function removeMessageById(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+window.sendPromptToAi = function(promptText) {
+  if (elements.aiAssistantPanel) elements.aiAssistantPanel.classList.add('open');
+  if (elements.aiChatInput) elements.aiChatInput.value = promptText;
+  sendAiMessage();
+};
+
+function formatMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/```json([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
+    .replace(/```([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
 }
 
 // WORKSPACE Handlers
@@ -632,193 +830,47 @@ function renderLogs() {
   });
 }
 
-// Digital Twin Topology Map
-async function fetchTopology() {
+async function fetchAnomalies() {
   if (!state.isAuthenticated) return;
   try {
-    const res = await fetch('/api/topology');
+    const res = await fetch('/api/anomalies');
     if (!res.ok) return;
     const data = await res.json();
-    state.topology = data;
-    renderTopology(data);
+    renderAnomalies(data.anomalies || []);
   } catch (err) {
-    console.error('Topology fetch error:', err);
+    console.error('Error fetching anomalies:', err);
   }
 }
 
-function renderTopology(topology) {
-  const svg = elements.topologySvg;
-  if (!svg || !topology) return;
+function renderAnomalies(anomalies) {
+  if (!elements.anomaliesList) return;
+  if (elements.anomalyCountPill) elements.anomalyCountPill.textContent = `${anomalies.length} Detected`;
+  if (elements.navAnomalyBadge) elements.navAnomalyBadge.textContent = anomalies.length;
 
-  const width = 650;
-  const height = 280;
-  const nodes = topology.nodes || [];
-  const links = topology.links || [];
+  if (anomalies.length === 0) {
+    elements.anomaliesList.innerHTML = `
+      <div class="empty-state" style="padding: 20px; text-align: center;">
+        <i data-lucide="check-circle" class="empty-icon text-emerald" style="width: 32px; height: 32px; margin-bottom: 8px;"></i>
+        <p style="color: var(--text-muted); font-size: 0.82rem;">All monitored thresholds are within standard parameters.</p>
+      </div>`;
+    initLucide();
+    return;
+  }
 
-  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-  let svgHtml = '<g id="topology-graph-root">';
-
-  links.forEach(l => {
-    const sourceNode = nodes.find(n => n.id === l.source);
-    const targetNode = nodes.find(n => n.id === l.target);
-    if (sourceNode && targetNode) {
-      svgHtml += `<line x1="${sourceNode.x}" y1="${sourceNode.y}" x2="${targetNode.x}" y2="${targetNode.y}" stroke="rgba(56,189,248,0.4)" stroke-width="3" stroke-dasharray="6"/>`;
-    }
-  });
-
-  nodes.forEach(n => {
-    svgHtml += `
-      <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectDigitalTwinNode('${n.id}')" style="cursor: pointer;">
-        <circle r="26" fill="#0e1526" stroke="#38bdf8" stroke-width="3"/>
-        <text text-anchor="middle" y="44" fill="#f8fafc" font-size="12" font-weight="700" font-family="var(--font-sans)">${n.label}</text>
-        <circle r="7" fill="#10b981" cx="18" cy="-18"/>
-      </g>
-    `;
-  });
-
-  svgHtml += '</g>';
-  svg.innerHTML = svgHtml;
-  initLucide();
-}
-
-window.inspectDigitalTwinNode = function(nodeId) {
-  if (!state.topology || !state.topology.nodes) return;
-  const node = state.topology.nodes.find(n => n.id === nodeId);
-  if (!node) return;
-
-  const nodeLabel = node.label || node.id || 'Unknown Node';
-  if (elements.dtDrawerTitle) elements.dtDrawerTitle.textContent = `${nodeLabel} (${node.id})`;
-  if (elements.dtDrawerBody) {
-    elements.dtDrawerBody.innerHTML = `
-      <div>
-        <span class="dt-section-title">NODE TELEMETRY & HEALTH</span>
-        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-glass); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:10px;">
-          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Operational Status</span><span class="health-pill healthy">● HEALTHY</span></div>
-          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Architecture Type</span><code>${(node.type || 'service').toUpperCase()}</code></div>
-          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">AWS Region</span><code>${node.region || 'eu-north-1'}</code></div>
-        </div>
+  elements.anomaliesList.innerHTML = '';
+  anomalies.forEach(a => {
+    const item = document.createElement('div');
+    item.className = `anomaly-item ${a.severity ? a.severity.toLowerCase() : 'critical'}`;
+    item.innerHTML = `
+      <div class="anomaly-header">
+        <span class="anomaly-title">${a.title}</span>
+        <span class="anomaly-time">${a.timestamp}</span>
       </div>
-      <div>
-        <span class="dt-section-title">QUICK ACTIONS</span>
-        <div class="dt-action-grid">
-          <button class="action-btn" style="justify-content:center; font-size:0.78rem;" onclick="sendPromptToAi('Inspect telemetry for node ${nodeLabel}')">Ask AI</button>
-          <button class="action-btn" style="justify-content:center; font-size:0.78rem; border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="dispatchGlobalRefresh()">Sync Node</button>
-        </div>
-      </div>
+      <div class="anomaly-desc">${a.description}</div>
     `;
-  }
-  if (elements.digitalTwinDrawer) elements.digitalTwinDrawer.classList.add('open');
-};
-
-if (elements.closeDtDrawerBtn) {
-  elements.closeDtDrawerBtn.addEventListener('click', () => {
-    elements.digitalTwinDrawer.classList.remove('open');
+    elements.anomaliesList.appendChild(item);
   });
-}
-
-// AI Assistant Integration
-async function sendAiMessage() {
-  const text = elements.aiChatInput.value.trim();
-  if (!text) return;
-
-  appendChatMessage('user', text);
-  elements.aiChatInput.value = '';
-  elements.aiChatInput.disabled = true;
-  elements.sendAiChatBtn.disabled = true;
-
-  const loadingId = appendLoadingMessage();
-
-  try {
-    const res = await fetch('/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: text,
-        history: state.chatHistory,
-        include_system_context: true
-      })
-    });
-
-    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
-
-    const data = await res.json();
-    removeMessageById(loadingId);
-
-    const replyContent = data.reply || 'Action executed successfully.';
-    if (data.ui_action) {
-      const action = data.ui_action;
-      if (action.type === 'REFRESH_DASHBOARD') dispatchGlobalRefresh();
-      else if (action.type === 'FILTER_LOGS') {
-        const levelSelect = document.getElementById('logLevelFilter');
-        if (levelSelect) { levelSelect.value = action.level || 'ALL'; renderLogs(); }
-      } else if (action.type === 'CLEAR_LOGS') { state.logs = []; renderLogs(); }
-      else if (action.type === 'NAVIGATE_VIEW') {
-        const navBtn = document.querySelector(`[data-view="${action.view}"]`);
-        if (navBtn) navBtn.click();
-      }
-    }
-
-    appendChatMessage('assistant', replyContent);
-    state.chatHistory.push({ role: 'user', content: text });
-    state.chatHistory.push({ role: 'assistant', content: replyContent });
-  } catch (err) {
-    console.error('Chat error:', err);
-    removeMessageById(loadingId);
-    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI agent.');
-  } finally {
-    elements.aiChatInput.disabled = false;
-    elements.sendAiChatBtn.disabled = false;
-    elements.aiChatInput.focus();
-  }
-}
-
-function appendChatMessage(role, content) {
-  const msgDiv = document.createElement('div');
-  msgDiv.className = `chat-message ${role}`;
-  msgDiv.innerHTML = `
-    <div class="message-avatar"><i data-lucide="${role === 'assistant' ? 'bot' : 'user'}"></i></div>
-    <div class="message-content">${formatMarkdown(content)}</div>
-  `;
-  elements.aiChatMessages.appendChild(msgDiv);
-  elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
   initLucide();
-}
-
-function appendLoadingMessage() {
-  const id = 'loading-' + Date.now();
-  const msgDiv = document.createElement('div');
-  msgDiv.id = id;
-  msgDiv.className = 'chat-message assistant';
-  msgDiv.innerHTML = `
-    <div class="message-avatar"><i data-lucide="bot"></i></div>
-    <div class="message-content" style="color:var(--text-muted);"><em>Agent tool execution & verification in progress...</em></div>
-  `;
-  elements.aiChatMessages.appendChild(msgDiv);
-  elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
-  initLucide();
-  return id;
-}
-
-function removeMessageById(id) {
-  const el = document.getElementById(id);
-  if (el) el.remove();
-}
-
-window.sendPromptToAi = function(promptText) {
-  if (elements.aiAssistantPanel) elements.aiAssistantPanel.classList.add('open');
-  if (elements.aiChatInput) elements.aiChatInput.value = promptText;
-  sendAiMessage();
-};
-
-function formatMarkdown(text) {
-  if (!text) return '';
-  return text
-    .replace(/```json([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
-    .replace(/```([\s\S]*?)```/g, '<pre style="background:#050811;padding:8px;border-radius:6px;margin:6px 0;font-family:var(--font-mono);font-size:0.8rem;overflow-x:auto;"><code>$1</code></pre>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/\n/g, '<br>');
 }
 
 async function fetchIncidents() {
