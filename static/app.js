@@ -421,7 +421,10 @@ window.triggerDeploymentAction = async function(serviceName, actionType, btnEl) 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ service_id: serviceName, action: actionType })
     });
-    if (!res.ok) throw new Error('Deployment action failed');
+    const data = await res.json();
+    if (data.status !== 'success') {
+      alert(`Verification Failed for ${serviceName}: ${data.error || 'Unknown error'}`);
+    }
     await Promise.all([fetchLogs(), fetchWorkspaceDeployments(), fetchWorkspaceSummary(), fetchWorkspaceActivity()]);
   } catch (err) {
     console.error(`Deployment action ${actionType} failed:`, err);
@@ -625,7 +628,7 @@ function appendLoadingMessage() {
   msgDiv.className = 'chat-message assistant';
   msgDiv.innerHTML = `
     <div class="message-avatar"><i data-lucide="bot"></i></div>
-    <div class="message-content" style="color:var(--text-muted);"><em>Agent tool execution in progress...</em></div>
+    <div class="message-content" style="color:var(--text-muted);"><em>Agent tool execution & verification in progress...</em></div>
   `;
   elements.aiChatMessages.appendChild(msgDiv);
   elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
