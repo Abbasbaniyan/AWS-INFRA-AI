@@ -91,8 +91,6 @@ const elements = {
   dashboardLogBox: document.getElementById('dashboardLogBox'),
   logLevelFilter: document.getElementById('logLevelFilter'),
   clearLogsBtn: document.getElementById('clearLogsBtn'),
-  globalSearchInput: document.getElementById('globalSearchInput'),
-  searchResultsDropdown: document.getElementById('searchResultsDropdown'),
   aiAssistantPanel: document.getElementById('aiAssistantPanel'),
   toggleAiPanelBtn: document.getElementById('toggleAiPanelBtn'),
   closeAiPanelBtn: document.getElementById('closeAiPanelBtn'),
@@ -102,16 +100,9 @@ const elements = {
   promptChips: document.querySelectorAll('.prompt-chip'),
   refreshAllBtn: document.getElementById('refreshAllBtn'),
   refreshIcon: document.getElementById('refreshIcon'),
-  nodeModal: document.getElementById('nodeModal'),
-  modalNodeTitle: document.getElementById('modalNodeTitle'),
-  modalNodeContent: document.getElementById('modalNodeContent'),
-  closeNodeModalBtn: document.getElementById('closeNodeModalBtn'),
-  modalCloseBtn: document.getElementById('modalCloseBtn'),
-  modalAiDiagnoseBtn: document.getElementById('modalAiDiagnoseBtn'),
   backToDashBtn: document.getElementById('backToDashBtn'),
   resourceViewTitle: document.getElementById('resourceViewTitle'),
   resourceViewSubtitle: document.getElementById('resourceViewSubtitle'),
-  resourceFilterInput: document.getElementById('resourceFilterInput'),
   resourceCountDisplay: document.getElementById('resourceCountDisplay'),
   resourceTableHeader: document.getElementById('resourceTableHeader'),
   resourceTableBody: document.getElementById('resourceTableBody')
@@ -123,9 +114,7 @@ function initLucide() {
   }
 }
 
-// -----------------------------------------------------------------------------
 // Authentication Flow
-// -----------------------------------------------------------------------------
 window.handleLoginSubmit = async function(e) {
   if (e) e.preventDefault();
   
@@ -200,18 +189,16 @@ function lockApplication() {
 
 function startDataPolling() {
   stopDataPolling();
-  
   dispatchGlobalRefresh();
 
-  state.pollTimers.push(setInterval(fetchMetrics, 3000));
-  state.pollTimers.push(setInterval(fetchAnomalies, 4000));
+  state.pollTimers.push(setInterval(fetchMetrics, 4000));
+  state.pollTimers.push(setInterval(fetchAnomalies, 5000));
   state.pollTimers.push(setInterval(fetchLogs, 5000));
   state.pollTimers.push(setInterval(fetchWorkspaceSummary, 6000));
   state.pollTimers.push(setInterval(fetchWorkspaceServers, 10000));
   state.pollTimers.push(setInterval(fetchWorkspaceModels, 12000));
   state.pollTimers.push(setInterval(fetchWorkspaceDeployments, 15000));
   state.pollTimers.push(setInterval(fetchWorkspaceActivity, 15000));
-  state.pollTimers.push(setInterval(fetchCloudWatchFleetMetrics, 30000));
 }
 
 function stopDataPolling() {
@@ -219,15 +206,9 @@ function stopDataPolling() {
   state.pollTimers = [];
 }
 
-// -----------------------------------------------------------------------------
-// Global Manual Refresh Handler
-// -----------------------------------------------------------------------------
 async function dispatchGlobalRefresh() {
   if (!state.isAuthenticated) return;
-
-  if (elements.refreshIcon) {
-    elements.refreshIcon.classList.add('spin');
-  }
+  if (elements.refreshIcon) elements.refreshIcon.classList.add('spin');
 
   try {
     await Promise.allSettled([
@@ -245,16 +226,12 @@ async function dispatchGlobalRefresh() {
     ]);
   } finally {
     setTimeout(() => {
-      if (elements.refreshIcon) {
-        elements.refreshIcon.classList.remove('spin');
-      }
+      if (elements.refreshIcon) elements.refreshIcon.classList.remove('spin');
     }, 600);
   }
 }
 
-// -----------------------------------------------------------------------------
 // WORKSPACE Handlers
-// -----------------------------------------------------------------------------
 async function fetchWorkspaceSummary() {
   if (!state.isAuthenticated) return;
   try {
@@ -269,39 +246,15 @@ async function fetchWorkspaceSummary() {
 
 function updateWorkspaceSummaryUI(data) {
   if (!data) return;
-
   const servers = data.servers || {};
   const aiModel = data.ai_model || {};
   const services = data.services || {};
   const health = data.health || {};
 
-  if (elements.wsConnectedServers) {
-    elements.wsConnectedServers.textContent = `${servers.running ?? servers.total ?? 2} Nodes`;
-  }
-  if (elements.wsServerSub && servers.subtitle) {
-    elements.wsServerSub.textContent = servers.subtitle;
-  }
-
-  if (elements.wsModelEngine) {
-    elements.wsModelEngine.textContent = aiModel.model_name || 'qwen2.5-coder';
-  }
-  if (elements.wsModelSub && aiModel.subtitle) {
-    elements.wsModelSub.textContent = aiModel.subtitle;
-  }
-
-  if (elements.wsActiveServices) {
-    elements.wsActiveServices.textContent = `${services.healthy ?? 4} Healthy`;
-  }
-  if (elements.wsServicesSub && services.subtitle) {
-    elements.wsServicesSub.textContent = services.subtitle;
-  }
-
-  if (elements.wsHealthIndex) {
-    elements.wsHealthIndex.textContent = `${health.score ?? 96} / 100`;
-  }
-  if (elements.wsHealthSub && health.subtitle) {
-    elements.wsHealthSub.textContent = health.subtitle;
-  }
+  if (elements.wsConnectedServers) elements.wsConnectedServers.textContent = `${servers.running ?? 1} Nodes`;
+  if (elements.wsModelEngine) elements.wsModelEngine.textContent = aiModel.model_name || 'qwen2.5-coder';
+  if (elements.wsActiveServices) elements.wsActiveServices.textContent = `${services.healthy ?? 8} Healthy`;
+  if (elements.wsHealthIndex) elements.wsHealthIndex.textContent = `${health.score ?? 96} / 100`;
 }
 
 async function fetchWorkspaceServers() {
@@ -342,63 +295,23 @@ function renderWorkspaceServersUI(servers) {
             <div class="server-node-role">${s.role} • <code>${s.id}</code></div>
           </div>
         </div>
-        <span class="health-pill ${s.state === 'running' ? 'healthy' : 'critical'}">
-          ● ${s.state.toUpperCase()}
-        </span>
+        <span class="health-pill ${s.state === 'running' ? 'healthy' : 'critical'}">● ${s.state.toUpperCase()}</span>
       </div>
-
       <div class="server-metric-row">
-        <div class="server-metric-labels">
-          <span style="color: var(--text-secondary);">CPU Utilization</span>
-          <strong>${s.cpu_percent}% (${s.cpu_cores} vCPU)</strong>
-        </div>
-        <div class="mini-progress-bar">
-          <div class="progress-bar-inner bg-blue" style="width: ${Math.min(s.cpu_percent, 100)}%;"></div>
-        </div>
+        <div class="server-metric-labels"><span style="color: var(--text-secondary);">CPU Utilization</span><strong>${s.cpu_percent}% (${s.cpu_cores} vCPU)</strong></div>
+        <div class="mini-progress-bar"><div class="progress-bar-inner bg-blue" style="width: ${Math.min(s.cpu_percent, 100)}%;"></div></div>
       </div>
-
       <div class="server-metric-row">
-        <div class="server-metric-labels">
-          <span style="color: var(--text-secondary);">Memory Allocation</span>
-          <strong>${s.memory_percent}% (${s.memory_used_gb} / ${s.memory_total_gb} GB)</strong>
-        </div>
-        <div class="mini-progress-bar">
-          <div class="progress-bar-inner bg-purple" style="width: ${Math.min(s.memory_percent, 100)}%;"></div>
-        </div>
+        <div class="server-metric-labels"><span style="color: var(--text-secondary);">Memory Allocation</span><strong>${s.memory_percent}% (${s.memory_used_gb} / ${s.memory_total_gb} GB)</strong></div>
+        <div class="mini-progress-bar"><div class="progress-bar-inner bg-purple" style="width: ${Math.min(s.memory_percent, 100)}%;"></div></div>
       </div>
-
       <div class="server-info-matrix">
-        <div class="server-info-item">
-          <span class="server-info-title">Type & Zone</span>
-          <span class="server-info-val">${s.type} • ${s.az}</span>
-        </div>
-        <div class="server-info-item">
-          <span class="server-info-title">Uptime</span>
-          <span class="server-info-val">${s.uptime}</span>
-        </div>
-        <div class="server-info-item">
-          <span class="server-info-title">Private IPv4</span>
-          <span class="server-info-val">${s.private_ip}</span>
-        </div>
-        <div class="server-info-item">
-          <span class="server-info-title">Public IPv4</span>
-          <span class="server-info-val">${s.public_ip}</span>
-        </div>
-      </div>
-
-      <div class="server-actions-row">
-        <button class="action-btn" style="padding: 6px 12px; font-size: 0.78rem;" onclick="sendPromptToAi('Audit telemetry for server ${s.name} (${s.id})')">
-          <i data-lucide="sparkles" style="width: 14px; height: 14px;"></i>
-          <span>Diagnose Node</span>
-        </button>
-        <span class="badge-status-pill" style="font-size: 0.7rem;">
-          ${s.is_local_host ? 'Host Master' : 'Compute Worker'}
-        </span>
+        <div class="server-info-item"><span class="server-info-title">Type & Zone</span><span class="server-info-val">${s.type} • ${s.az}</span></div>
+        <div class="server-info-item"><span class="server-info-title">Uptime</span><span class="server-info-val">${s.uptime}</span></div>
       </div>
     `;
     elements.workspaceServersContainer.appendChild(card);
   });
-
   initLucide();
 }
 
@@ -430,49 +343,37 @@ function renderWorkspaceModelsUI(models) {
       <td><span class="badge-status-pill">${m.parameter_size || '0.5B'}</span></td>
       <td><code>${m.quantization_level || 'Q4'}</code></td>
       <td>${m.size_mb || 394} MB</td>
-      <td>
-        <span class="model-status-badge ${m.is_active ? 'in-memory' : 'idle'}">
-          ● ${m.status}
-        </span>
-      </td>
+      <td><span class="model-status-badge ${m.is_active ? 'in-memory' : 'idle'}">● ${m.status}</span></td>
       <td><strong style="color:var(--accent-cyan);">${m.ram_allocation_mb || 390} MB</strong></td>
       <td><span style="font-size:0.75rem; color:var(--text-muted);">${m.server || 'Host'}</span></td>
       <td>
         <div style="display:flex; gap:6px;">
-          ${
-            m.is_active
-              ? `<button class="action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-amber); color:var(--accent-amber);" onclick="triggerModelAction('${m.name}', 'unload')">
-                  <i data-lucide="power" style="width:12px; height:12px;"></i> Unload
-                 </button>`
-              : `<button class="action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="triggerModelAction('${m.name}', 'load')">
-                  <i data-lucide="zap" style="width:12px; height:12px;"></i> Pin RAM
-                 </button>`
+          ${m.is_active
+            ? `<button class="action-btn model-action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-amber); color:var(--accent-amber);" onclick="triggerModelAction('${m.name}', 'unload', this)">Unload</button>`
+            : `<button class="action-btn model-action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="triggerModelAction('${m.name}', 'load', this)">Pin RAM</button>`
           }
-          <button class="action-btn" style="padding:4px 8px; font-size:0.75rem;" onclick="sendPromptToAi('Benchmark latency for model: ${m.name}')">
-            <i data-lucide="sparkles" style="width:12px; height:12px;"></i>
-          </button>
         </div>
       </td>
     `;
     elements.workspaceModelsTableBody.appendChild(tr);
   });
-
   initLucide();
 }
 
-window.triggerModelAction = async function(modelName, actionType) {
+window.triggerModelAction = async function(modelName, actionType, btnEl) {
+  if (btnEl) btnEl.disabled = true;
   try {
-    await fetch('/api/workspace/models/action', {
+    const res = await fetch('/api/workspace/models/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: modelName, action: actionType })
     });
-    fetchWorkspaceModels();
-    fetchWorkspaceSummary();
-    fetchLogs();
-    fetchWorkspaceActivity();
+    if (!res.ok) throw new Error('Model action failed');
+    await Promise.all([fetchWorkspaceModels(), fetchWorkspaceSummary(), fetchLogs(), fetchWorkspaceActivity()]);
   } catch (err) {
     console.error(`Model action ${actionType} failed:`, err);
+  } finally {
+    if (btnEl) btnEl.disabled = false;
   }
 };
 
@@ -491,61 +392,41 @@ async function fetchWorkspaceDeployments() {
 function renderWorkspaceDeploymentsUI(deployments) {
   if (!elements.workspaceDeploymentsTableBody) return;
   elements.workspaceDeploymentsTableBody.innerHTML = '';
-
   if (elements.wsDeploymentsCountBadge) {
     elements.wsDeploymentsCountBadge.textContent = `${deployments.length} Services Live`;
-  }
-
-  if (deployments.length === 0) {
-    elements.workspaceDeploymentsTableBody.innerHTML = '<tr><td colspan="8" class="text-center">No active service deployments found.</td></tr>';
-    return;
   }
 
   deployments.forEach(d => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>
-        <div style="display:flex; flex-direction:column;">
-          <strong>${d.name || d.service}</strong>
-          <code style="font-size:0.72rem; color:var(--text-muted);">${d.service}</code>
-        </div>
-      </td>
+      <td><strong>${d.name || d.service}</strong></td>
       <td><code>:${d.port || 80}</code></td>
-      <td><span style="font-size:0.78rem; color:var(--text-secondary);">${d.runtime || 'Systemd'}</span></td>
       <td><span class="badge-status-pill">${d.commit || 'active'}</span></td>
-      <td>
-        <span class="health-pill ${d.status === 'running' ? 'healthy' : 'critical'}">
-          ● ${d.status.toUpperCase()}
-        </span>
-      </td>
+      <td><span class="health-pill ${d.status === 'running' ? 'healthy' : 'critical'}">● ${d.status.toUpperCase()}</span></td>
       <td>${d.uptime || 'Active'}</td>
-      <td><span style="font-size:0.75rem; color:var(--text-muted);">${d.target_host || 'Host'}</span></td>
       <td>
-        <div style="display:flex; gap:6px;">
-          <button class="action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-cyan); color:var(--accent-cyan);" onclick="triggerDeploymentAction('${d.service}', 'restart', this)">
-            <i data-lucide="rotate-cw" style="width:12px; height:12px;"></i> Restart
-          </button>
-        </div>
+        <button class="action-btn deploy-action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-cyan); color:var(--accent-cyan);" onclick="triggerDeploymentAction('${d.service}', 'restart', this)">Restart</button>
       </td>
     `;
     elements.workspaceDeploymentsTableBody.appendChild(tr);
   });
-
   initLucide();
 }
 
-window.triggerDeploymentAction = async function(serviceName, actionType, btnElement) {
+window.triggerDeploymentAction = async function(serviceName, actionType, btnEl) {
+  if (btnEl) btnEl.disabled = true;
   try {
-    await fetch('/api/workspace/deployments/action', {
+    const res = await fetch('/api/workspace/deployments/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ service_id: serviceName, action: actionType })
     });
-    await fetchLogs();
-    await fetchWorkspaceDeployments();
-    await fetchWorkspaceSummary();
+    if (!res.ok) throw new Error('Deployment action failed');
+    await Promise.all([fetchLogs(), fetchWorkspaceDeployments(), fetchWorkspaceSummary(), fetchWorkspaceActivity()]);
   } catch (err) {
     console.error(`Deployment action ${actionType} failed:`, err);
+  } finally {
+    if (btnEl) btnEl.disabled = false;
   }
 };
 
@@ -586,9 +467,7 @@ function renderWorkspaceActivityUI() {
   });
 }
 
-// -----------------------------------------------------------------------------
 // Live Log Stream
-// -----------------------------------------------------------------------------
 async function fetchLogs() {
   if (!state.isAuthenticated) return;
   try {
@@ -607,7 +486,6 @@ function renderLogs() {
   const filter = elements.logLevelFilter ? elements.logLevelFilter.value : 'ALL';
   if (!elements.dashboardLogBox) return;
   elements.dashboardLogBox.innerHTML = '';
-
   const filtered = filter === 'ALL' ? state.logs : state.logs.filter(l => l.level === filter);
 
   filtered.forEach(log => {
@@ -621,12 +499,9 @@ function renderLogs() {
     `;
     elements.dashboardLogBox.appendChild(row);
   });
-  elements.dashboardLogBox.scrollTop = 0;
 }
 
-// -----------------------------------------------------------------------------
-// Digital Twin Topology Map & Drill-Down Drawer
-// -----------------------------------------------------------------------------
+// Digital Twin Topology Map
 async function fetchTopology() {
   if (!state.isAuthenticated) return;
   try {
@@ -652,7 +527,6 @@ function renderTopology(topology) {
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   let svgHtml = '<g id="topology-graph-root">';
 
-  // Draw links first so they appear behind nodes
   links.forEach(l => {
     const sourceNode = nodes.find(n => n.id === l.source);
     const targetNode = nodes.find(n => n.id === l.target);
@@ -661,10 +535,9 @@ function renderTopology(topology) {
     }
   });
 
-  // Draw nodes
   nodes.forEach(n => {
     svgHtml += `
-      <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectDigitalTwinNode('${n.id}')" style="cursor: pointer;">
+      <g class="topology-node" transform="translate(${n.x},${n.y})" style="cursor: pointer;">
         <circle r="24" fill="#0e1526" stroke="#38bdf8" stroke-width="3"/>
         <text text-anchor="middle" y="42" fill="#f8fafc" font-size="11" font-weight="700" font-family="var(--font-sans)">${n.label}</text>
         <circle r="6" fill="#10b981" cx="16" cy="-16"/>
@@ -677,78 +550,7 @@ function renderTopology(topology) {
   initLucide();
 }
 
-window.inspectDigitalTwinNode = function(nodeId) {
-  if (!state.topology || !state.topology.nodes) return;
-  const node = state.topology.nodes.find(n => n.id === nodeId);
-  if (!node) return;
-
-  const nodeLabel = node.label || node.id || 'Unknown Node';
-  elements.dtDrawerTitle.textContent = `${nodeLabel} (${node.id})`;
-  elements.dtDrawerBody.innerHTML = `
-    <div>
-      <span class="dt-section-title">NODE TELEMETRY & HEALTH</span>
-      <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-glass); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:10px;">
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Operational Status</span><span class="health-pill healthy">● HEALTHY</span></div>
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Architecture Type</span><code>${(node.type || 'service').toUpperCase()}</code></div>
-        <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">AWS Region</span><code>${node.region || 'eu-north-1'}</code></div>
-      </div>
-    </div>
-    <div>
-      <span class="dt-section-title">QUICK ACTIONS</span>
-      <div class="dt-action-grid">
-        <button class="action-btn" style="justify-content:center; font-size:0.78rem;" onclick="sendPromptToAi('Inspect telemetry for node ${nodeLabel}')">Ask AI</button>
-        <button class="action-btn" style="justify-content:center; font-size:0.78rem; border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="dispatchGlobalRefresh()">Sync Node</button>
-      </div>
-    </div>
-  `;
-  if (elements.digitalTwinDrawer) elements.digitalTwinDrawer.classList.add('open');
-};
-
-if (elements.closeDtDrawerBtn) {
-  elements.closeDtDrawerBtn.addEventListener('click', () => {
-    elements.digitalTwinDrawer.classList.remove('open');
-  });
-}
-
-// -----------------------------------------------------------------------------
-// Simulation Modal
-// -----------------------------------------------------------------------------
-window.openSimulationModal = async function(serviceName, actionType) {
-  elements.simulationModal.classList.add('open');
-  elements.simulationModalContent.innerHTML = `<p style="color:var(--text-muted);">Running AI dependency cascade simulation for <code>${serviceName}</code>...</p>`;
-
-  try {
-    const res = await fetch('/api/workspace/simulate-impact', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target_service: serviceName, action_type: actionType })
-    });
-    const data = await res.json();
-    const sim = data.simulation || {};
-
-    elements.simulationModalContent.innerHTML = `
-      <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:var(--radius-md); padding:12px; margin-bottom:6px;">
-        <strong style="color:var(--accent-amber);">${sim.title}</strong>
-        <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">${sim.summary}</p>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:6px; font-size:0.82rem;">
-        <div style="display:flex; justify-content:space-between;"><span>AI SRE Chat Assistant:</span><strong>${sim.ai_chat}</strong></div>
-        <div style="display:flex; justify-content:space-between;"><span>Model Inference:</span><strong>${sim.model_inference}</strong></div>
-        <div style="display:flex; justify-content:space-between; margin-top:4px; border-top:1px solid var(--border-glass); padding-top:6px;"><span>Risk Level:</span><span class="health-pill critical">${sim.risk_level}</span></div>
-      </div>
-    `;
-  } catch (err) {
-    console.error('Simulation error:', err);
-  }
-};
-
-window.closeSimulationModal = function() {
-  if (elements.simulationModal) elements.simulationModal.classList.remove('open');
-};
-
-// -----------------------------------------------------------------------------
-// AI Assistant & UI Synchronization Engine
-// -----------------------------------------------------------------------------
+// AI Assistant Integration
 async function sendAiMessage() {
   const text = elements.aiChatInput.value.trim();
   if (!text) return;
@@ -777,34 +579,22 @@ async function sendAiMessage() {
     removeMessageById(loadingId);
 
     const replyContent = data.reply || 'Action executed successfully.';
-    
-    // Execute UI synchronization directive if returned by agent
     if (data.ui_action) {
       const action = data.ui_action;
-      if (action.type === 'REFRESH_DASHBOARD') {
-        dispatchGlobalRefresh();
-      } else if (action.type === 'FILTER_LOGS') {
+      if (action.type === 'REFRESH_DASHBOARD') dispatchGlobalRefresh();
+      else if (action.type === 'FILTER_LOGS') {
         const levelSelect = document.getElementById('logLevelFilter');
-        if (levelSelect) {
-          levelSelect.value = action.level || 'ALL';
-          renderLogs();
-        }
-      } else if (action.type === 'CLEAR_LOGS') {
-        state.logs = [];
-        renderLogs();
-      } else if (action.type === 'NAVIGATE_VIEW') {
+        if (levelSelect) { levelSelect.value = action.level || 'ALL'; renderLogs(); }
+      } else if (action.type === 'CLEAR_LOGS') { state.logs = []; renderLogs(); }
+      else if (action.type === 'NAVIGATE_VIEW') {
         const navBtn = document.querySelector(`[data-view="${action.view}"]`);
         if (navBtn) navBtn.click();
-        else switchView(action.view);
-      } else if (action.type === 'SWITCH_WORKSPACE_TAB') {
-        switchWorkspaceTab(action.tab);
       }
     }
 
     appendChatMessage('assistant', replyContent);
     state.chatHistory.push({ role: 'user', content: text });
     state.chatHistory.push({ role: 'assistant', content: replyContent });
-
   } catch (err) {
     console.error('Chat error:', err);
     removeMessageById(loadingId);
@@ -864,9 +654,6 @@ function formatMarkdown(text) {
     .replace(/\n/g, '<br>');
 }
 
-// -----------------------------------------------------------------------------
-// CloudWatch Fleet Metrics & Incidents
-// -----------------------------------------------------------------------------
 async function fetchCloudWatchFleetMetrics() {
   if (!state.isAuthenticated) return;
   try {
@@ -913,9 +700,6 @@ async function fetchIncidents() {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Navigation & Event Listeners
-// -----------------------------------------------------------------------------
 function initEventListeners() {
   const refreshBtn = document.getElementById('refreshAllBtn');
   if (refreshBtn) {
@@ -936,28 +720,8 @@ function initEventListeners() {
   elements.navButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const view = btn.getAttribute('data-view');
-      
-      if (view === 'anomalies') {
-        switchView('dashboard');
-        elements.navButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const anomalyCard = document.querySelector('.anomalies-card');
-        if (anomalyCard) anomalyCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-
-      if (view === 'logs') {
-        switchView('dashboard');
-        elements.navButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const logCard = document.querySelector('.logs-console-card');
-        if (logCard) logCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-
       elements.navButtons.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-
       if (['ec2', 'vpc', 's3', 'iam', 'services'].includes(view)) {
         renderResourceTable(view);
       } else {
@@ -972,31 +736,6 @@ function initEventListeners() {
         const targetTab = tabBtn.getAttribute('data-workspace-tab');
         switchWorkspaceTab(targetTab);
       });
-    });
-  }
-
-  if (elements.modelPullBtn && elements.modelPullInput) {
-    elements.modelPullBtn.addEventListener('click', () => {
-      const targetModel = elements.modelPullInput.value.trim();
-      if (!targetModel) return;
-      triggerModelAction(targetModel, 'pull');
-      elements.modelPullInput.value = '';
-    });
-  }
-
-  if (elements.wsActivityCategoryFilter) {
-    elements.wsActivityCategoryFilter.addEventListener('change', renderWorkspaceActivityUI);
-  }
-  if (elements.wsRefreshActivityBtn) {
-    elements.wsRefreshActivityBtn.addEventListener('click', fetchWorkspaceActivity);
-  }
-
-  if (elements.backToDashBtn) {
-    elements.backToDashBtn.addEventListener('click', () => {
-      elements.navButtons.forEach(b => b.classList.remove('active'));
-      const dashBtn = document.querySelector('[data-view="dashboard"]');
-      if (dashBtn) dashBtn.classList.add('active');
-      switchView('dashboard');
     });
   }
 
@@ -1046,7 +785,6 @@ function initEventListeners() {
 
 function switchView(viewName) {
   state.activeView = viewName;
-  
   if (elements.views.dashboard) elements.views.dashboard.classList.remove('active');
   if (elements.views.resources) elements.views.resources.classList.remove('active');
   if (elements.views.workspace) elements.views.workspace.classList.remove('active');
@@ -1091,7 +829,6 @@ function updateDashboardUI(data) {
   const disk = data.disk || {};
   const uptime = data.uptime || {};
   const health = data.health || {};
-  const network = data.network || {};
 
   const healthScore = Number(health.score ?? 0);
   if (elements.healthScoreValue) elements.healthScoreValue.textContent = Math.round(healthScore);
@@ -1110,11 +847,8 @@ function updateDashboardUI(data) {
   if (elements.diskUsage) elements.diskUsage.textContent = `${diskPercent.toFixed(1)}%`;
   if (elements.diskProgressBar) elements.diskProgressBar.style.width = `${Math.min(diskPercent, 100)}%`;
 
-  if (elements.systemUptime) elements.systemUptime.textContent = uptime.formatted || '0h 0m 0s';
-  
-  if (Array.isArray(data.top_processes)) {
-    renderProcesses(data.top_processes);
-  }
+  if (elements.systemUptime) elements.systemUptime.textContent = uptime.formatted || '0h 0m';
+  if (Array.isArray(data.top_processes)) renderProcesses(data.top_processes);
   state.metrics = data;
 }
 
