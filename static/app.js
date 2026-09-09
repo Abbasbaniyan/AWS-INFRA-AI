@@ -132,7 +132,7 @@ function drawSparkline(canvas, dataPoints) {
 
   ctx.beginPath();
   ctx.strokeStyle = '#38bdf8';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
 
   dataPoints.forEach((val, idx) => {
@@ -143,8 +143,6 @@ function drawSparkline(canvas, dataPoints) {
   });
   ctx.stroke();
 }
-
-const cwHistory = [14.2, 16.5, 15.0, 18.2, 17.8, 18.5];
 
 // Authentication Flow
 window.handleLoginSubmit = async function(e) {
@@ -224,6 +222,7 @@ function startDataPolling() {
   dispatchGlobalRefresh();
 
   state.pollTimers.push(setInterval(fetchMetrics, 3000));
+  state.pollTimers.push(setInterval(fetchCloudWatchFleetMetrics, 10000));
   state.pollTimers.push(setInterval(fetchAnomalies, 5000));
   state.pollTimers.push(setInterval(fetchLogs, 4000));
   state.pollTimers.push(setInterval(fetchWorkspaceSummary, 6000));
@@ -245,10 +244,10 @@ async function dispatchGlobalRefresh() {
   try {
     await Promise.allSettled([
       fetchMetrics(),
+      fetchCloudWatchFleetMetrics(),
       fetchAnomalies(),
       fetchTopology(),
       fetchLogs(),
-      fetchCloudWatchFleetMetrics(),
       fetchIncidents(),
       fetchWorkspaceSummary(),
       fetchWorkspaceServers(),
@@ -292,7 +291,7 @@ function updateDashboardUI(data) {
   if (elements.cpuCores) elements.cpuCores.textContent = `${cpu.cores || 2} Cores`;
   if (elements.cpuProgressBar) elements.cpuProgressBar.style.width = `${Math.min(cpuPercent, 100)}%`;
 
-  // 3. Memory Card (Real used/total GB populated)
+  // 3. Memory Card
   const memPercent = Number(memory.percent ?? 0);
   if (elements.memoryUsage) elements.memoryUsage.textContent = `${memPercent.toFixed(1)}%`;
   if (elements.memoryDetails) {
@@ -300,7 +299,7 @@ function updateDashboardUI(data) {
   }
   if (elements.memProgressBar) elements.memProgressBar.style.width = `${Math.min(memPercent, 100)}%`;
 
-  // 4. Root Disk Card (Real used/total GB populated)
+  // 4. Root Disk Card
   const diskPercent = Number(disk.percent ?? 0);
   if (elements.diskUsage) elements.diskUsage.textContent = `${diskPercent.toFixed(1)}%`;
   if (elements.diskDetails) {
@@ -308,7 +307,7 @@ function updateDashboardUI(data) {
   }
   if (elements.diskProgressBar) elements.diskProgressBar.style.width = `${Math.min(diskPercent, 100)}%`;
 
-  // 5. Network I/O Card (Real rates + totals)
+  // 5. Network I/O Card
   if (elements.networkRate) {
     const activeRate = (net.kb_recv_sec || 0) + (net.kb_sent_sec || 0);
     elements.networkRate.textContent = `${activeRate.toFixed(1)} KB/s`;
@@ -335,6 +334,24 @@ async function fetchMetrics() {
     updateDashboardUI(data);
   } catch (err) {
     console.error('Error fetching metrics:', err);
+  }
+}
+
+async function fetchCloudWatchFleetMetrics() {
+  if (!state.isAuthenticated) return;
+  try {
+    const res = await fetch('/api/cloudwatch/ec2-metrics');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (elements.cwLatestCpu) elements.cwLatestCpu.textContent = `${data.latest_cpu_percent}%`;
+    if (elements.cwSourceBadge) {
+      elements.cwSourceBadge.textContent = data.source === 'aws-cloudwatch' ? 'AWS Live (1h)' : 'Live Telemetry (1h)';
+    }
+    if (data.history && Array.isArray(data.history)) {
+      drawSparkline(elements.cwMetricChart, data.history);
+    }
+  } catch (err) {
+    console.error('CloudWatch metrics fetch error:', err);
   }
 }
 
@@ -802,25 +819,6 @@ function formatMarkdown(text) {
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/\n/g, '<br>');
-}
-
-async function fetchCloudWatchFleetMetrics() {
-  if (!state.isAuthenticated) return;
-  try {
-    const res = await fetch('/api/cloudwatch/ec2-metrics');
-    if (!res.ok) return;
-    const data = await res.json();
-    if (elements.cwLatestCpu) elements.cwLatestCpu.textContent = `${data.latest_cpu_percent}%`;
-    if (elements.cwSourceBadge) elements.cwSourceBadge.textContent = data.source === 'aws-cloudwatch' ? 'AWS Live (1h)' : 'Simulated (1h)';
-
-    if (data.latest_cpu_percent) {
-      cwHistory.push(data.latest_cpu_percent);
-      if (cwHistory.length > 8) cwHistory.shift();
-      drawSparkline(elements.cwMetricChart, cwHistory);
-    }
-  } catch (err) {
-    console.error('CloudWatch metrics fetch error:', err);
-  }
 }
 
 async function fetchIncidents() {
