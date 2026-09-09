@@ -644,7 +644,7 @@ function renderTopology(topology) {
   const svg = elements.topologySvg;
   if (!svg || !topology) return;
 
-  const width = svg.clientWidth || 600;
+  const width = svg.clientWidth || 650;
   const height = 320;
   const nodes = topology.nodes || [];
   const links = topology.links || [];
@@ -652,26 +652,29 @@ function renderTopology(topology) {
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   let svgHtml = '<g id="topology-graph-root">';
 
+  // Draw links first so they appear behind nodes
   links.forEach(l => {
     const sourceNode = nodes.find(n => n.id === l.source);
     const targetNode = nodes.find(n => n.id === l.target);
     if (sourceNode && targetNode) {
-      svgHtml += `<line x1="${sourceNode.x}" y1="${sourceNode.y}" x2="${targetNode.x}" y2="${targetNode.y}" stroke="rgba(56,189,248,0.3)" stroke-width="2.5" stroke-dasharray="5"/>`;
+      svgHtml += `<line x1="${sourceNode.x}" y1="${sourceNode.y}" x2="${targetNode.x}" y2="${targetNode.y}" stroke="rgba(56,189,248,0.4)" stroke-width="3" stroke-dasharray="6"/>`;
     }
   });
 
+  // Draw nodes
   nodes.forEach(n => {
     svgHtml += `
-      <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectDigitalTwinNode('${n.id}')">
-        <circle r="22" fill="#0e1526" stroke="#38bdf8" stroke-width="3"/>
-        <text text-anchor="middle" y="36" fill="#f8fafc" font-size="11" font-weight="700">${n.label}</text>
-        <circle r="6" fill="#10b981" cx="14" cy="-14"/>
+      <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectDigitalTwinNode('${n.id}')" style="cursor: pointer;">
+        <circle r="24" fill="#0e1526" stroke="#38bdf8" stroke-width="3"/>
+        <text text-anchor="middle" y="42" fill="#f8fafc" font-size="11" font-weight="700" font-family="var(--font-sans)">${n.label}</text>
+        <circle r="6" fill="#10b981" cx="16" cy="-16"/>
       </g>
     `;
   });
 
   svgHtml += '</g>';
   svg.innerHTML = svgHtml;
+  initLucide();
 }
 
 window.inspectDigitalTwinNode = function(nodeId) {
