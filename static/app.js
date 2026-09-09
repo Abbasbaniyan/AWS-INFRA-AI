@@ -193,7 +193,7 @@ function startDataPolling() {
 
   state.pollTimers.push(setInterval(fetchMetrics, 4000));
   state.pollTimers.push(setInterval(fetchAnomalies, 5000));
-  state.pollTimers.push(setInterval(fetchLogs, 5000));
+  state.pollTimers.push(setInterval(fetchLogs, 4000));
   state.pollTimers.push(setInterval(fetchWorkspaceSummary, 6000));
   state.pollTimers.push(setInterval(fetchWorkspaceServers, 10000));
   state.pollTimers.push(setInterval(fetchWorkspaceModels, 12000));
@@ -522,14 +522,16 @@ function renderTopology(topology) {
   const svg = elements.topologySvg;
   if (!svg || !topology) return;
 
-  const width = svg.clientWidth || 650;
-  const height = 320;
+  const width = 650;
+  const height = 280;
   const nodes = topology.nodes || [];
   const links = topology.links || [];
 
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   let svgHtml = '<g id="topology-graph-root">';
 
+  // Draw links first
   links.forEach(l => {
     const sourceNode = nodes.find(n => n.id === l.source);
     const targetNode = nodes.find(n => n.id === l.target);
@@ -538,12 +540,13 @@ function renderTopology(topology) {
     }
   });
 
+  // Draw nodes
   nodes.forEach(n => {
     svgHtml += `
-      <g class="topology-node" transform="translate(${n.x},${n.y})" style="cursor: pointer;">
-        <circle r="24" fill="#0e1526" stroke="#38bdf8" stroke-width="3"/>
-        <text text-anchor="middle" y="42" fill="#f8fafc" font-size="11" font-weight="700" font-family="var(--font-sans)">${n.label}</text>
-        <circle r="6" fill="#10b981" cx="16" cy="-16"/>
+      <g class="topology-node" transform="translate(${n.x},${n.y})" onclick="inspectDigitalTwinNode('${n.id}')" style="cursor: pointer;">
+        <circle r="26" fill="#0e1526" stroke="#38bdf8" stroke-width="3"/>
+        <text text-anchor="middle" y="44" fill="#f8fafc" font-size="12" font-weight="700" font-family="var(--font-sans)">${n.label}</text>
+        <circle r="7" fill="#10b981" cx="18" cy="-18"/>
       </g>
     `;
   });
@@ -551,6 +554,41 @@ function renderTopology(topology) {
   svgHtml += '</g>';
   svg.innerHTML = svgHtml;
   initLucide();
+}
+
+window.inspectDigitalTwinNode = function(nodeId) {
+  if (!state.topology || !state.topology.nodes) return;
+  const node = state.topology.nodes.find(n => n.id === nodeId);
+  if (!node) return;
+
+  const nodeLabel = node.label || node.id || 'Unknown Node';
+  if (elements.dtDrawerTitle) elements.dtDrawerTitle.textContent = `${nodeLabel} (${node.id})`;
+  if (elements.dtDrawerBody) {
+    elements.dtDrawerBody.innerHTML = `
+      <div>
+        <span class="dt-section-title">NODE TELEMETRY & HEALTH</span>
+        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-glass); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Operational Status</span><span class="health-pill healthy">● HEALTHY</span></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Architecture Type</span><code>${(node.type || 'service').toUpperCase()}</code></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">AWS Region</span><code>${node.region || 'eu-north-1'}</code></div>
+        </div>
+      </div>
+      <div>
+        <span class="dt-section-title">QUICK ACTIONS</span>
+        <div class="dt-action-grid">
+          <button class="action-btn" style="justify-content:center; font-size:0.78rem;" onclick="sendPromptToAi('Inspect telemetry for node ${nodeLabel}')">Ask AI</button>
+          <button class="action-btn" style="justify-content:center; font-size:0.78rem; border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="dispatchGlobalRefresh()">Sync Node</button>
+        </div>
+      </div>
+    `;
+  }
+  if (elements.digitalTwinDrawer) elements.digitalTwinDrawer.classList.add('open');
+};
+
+if (elements.closeDtDrawerBtn) {
+  elements.closeDtDrawerBtn.addEventListener('click', () => {
+    elements.digitalTwinDrawer.classList.remove('open');
+  });
 }
 
 // AI Assistant Integration
@@ -703,6 +741,7 @@ async function fetchIncidents() {
   }
 }
 
+// Navigation & Event Listeners
 function initEventListeners() {
   const refreshBtn = document.getElementById('refreshAllBtn');
   if (refreshBtn) {
@@ -725,6 +764,39 @@ function initEventListeners() {
       const view = btn.getAttribute('data-view');
       elements.navButtons.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+
+      // 1. ANOMALIES BUTTON: Switch to Dashboard & scroll directly to Anomalies card
+      if (view === 'anomalies') {
+        switchView('dashboard');
+        setTimeout(() => {
+          const anomalyCard = document.querySelector('.anomalies-card');
+          if (anomalyCard) anomalyCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+        return;
+      }
+
+      // 2. LIVE LOGS BUTTON: Switch to Dashboard & scroll directly to Live Logs card
+      if (view === 'logs') {
+        switchView('dashboard');
+        setTimeout(() => {
+          const logCard = document.querySelector('.logs-console-card');
+          if (logCard) logCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+        return;
+      }
+
+      // 3. DIGITAL TWIN MAP BUTTON: Switch to Dashboard & scroll to Digital Twin section + re-render SVG
+      if (view === 'topology') {
+        switchView('dashboard');
+        setTimeout(() => {
+          const mapCard = document.querySelector('.map-card');
+          if (mapCard) mapCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          fetchTopology();
+        }, 100);
+        return;
+      }
+
+      // 4. AWS RESOURCES (EC2, VPC, S3, IAM, Services)
       if (['ec2', 'vpc', 's3', 'iam', 'services'].includes(view)) {
         renderResourceTable(view);
       } else {
@@ -739,6 +811,15 @@ function initEventListeners() {
         const targetTab = tabBtn.getAttribute('data-workspace-tab');
         switchWorkspaceTab(targetTab);
       });
+    });
+  }
+
+  if (elements.backToDashBtn) {
+    elements.backToDashBtn.addEventListener('click', () => {
+      elements.navButtons.forEach(b => b.classList.remove('active'));
+      const dashBtn = document.querySelector('[data-view="dashboard"]');
+      if (dashBtn) dashBtn.classList.add('active');
+      switchView('dashboard');
     });
   }
 
@@ -795,6 +876,7 @@ function switchView(viewName) {
   if (viewName === 'dashboard' || viewName === 'topology') {
     elements.views.dashboard.classList.add('active');
     fetchLogs();
+    fetchTopology();
   } else if (viewName === 'workspace') {
     elements.views.workspace.classList.add('active');
     fetchWorkspaceSummary();
