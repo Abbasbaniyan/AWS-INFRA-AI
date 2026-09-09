@@ -1,6 +1,6 @@
 """
 AWS Infrastructure AI Assistant & CloudWatch Incident Troubleshooting System
-Direct Ollama LLM Inference Engine with Strict Intent Routing and Verified Service Lifecycles.
+Direct Ollama LLM Inference Engine with Comprehensive Intent Classification and Verified Lifecycles.
 """
 
 import os
@@ -26,8 +26,8 @@ load_dotenv()
 
 app = FastAPI(
     title="AWS Infrastructure AI Assistant API",
-    description="Dynamic CloudOps AI engine with strict intent classification and verified lifecycles.",
-    version="4.0.0"
+    description="Dynamic CloudOps AI engine with comprehensive intent classification and verified lifecycles.",
+    version="4.1.0"
 )
 
 app.add_middleware(
@@ -185,7 +185,7 @@ def get_top_procs(limit: int = 6):
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "4.0.0"}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "4.1.0"}
 
 @app.get("/metrics")
 def get_metrics():
@@ -295,7 +295,7 @@ def get_workspace_deployments():
             "name": svc.upper(),
             "port": ports.get(svc, 80),
             "runtime": "Systemd",
-            "commit": "v4.0-prod",
+            "commit": "v4.1-prod",
             "status": state,
             "uptime": "Active",
             "target_host": "Host Master"
@@ -307,7 +307,6 @@ def execute_deployment_action(req: DeploymentActionRequest):
     svc = req.service_id.lower().strip()
     act = req.action.lower().strip()
     
-    # 1. Deterministic Service Validation
     if svc not in service_states:
         return {
             "status": "failed",
@@ -319,7 +318,6 @@ def execute_deployment_action(req: DeploymentActionRequest):
             "error": f"I couldn't find a service named '{svc}' in the available service inventory."
         }
 
-    # 2. Validate action type
     if act not in ["start", "stop", "restart"]:
         return {
             "status": "failed",
@@ -331,11 +329,9 @@ def execute_deployment_action(req: DeploymentActionRequest):
             "error": f"Invalid lifecycle action '{act}'. Allowed actions: start, stop, restart."
         }
 
-    # 3. Execute action
     target_state = "running" if act in ["restart", "reload", "start"] else "stopped"
     service_states[svc] = target_state
 
-    # 4. Real Post-Action Service State Verification
     time.sleep(0.1)
     verified_state = service_states.get(svc)
     is_verified = (verified_state == "running" if target_state == "running" else verified_state == "stopped")
@@ -452,7 +448,7 @@ def get_resources(resource_type: str):
 # Agent Tools Registry
 AGENT_TOOLS = [
     {"type": "function", "function": {"name": "get_system_metrics", "description": "Fetch host system metrics including CPU utilization, memory, and disk usage.", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "get_ec2_instances", "description": "Fetch AWS EC2 instances.", "parameters": {"type": "object", "properties": {"status": {"type": "string"}}}}},
+    {"type": "function", "function": {"name": "get_ec2_instances", "description": "Fetch AWS EC2 instances and running instance inventory.", "parameters": {"type": "object", "properties": {"status": {"type": "string"}}}}},
     {"type": "function", "function": {"name": "get_vpcs", "description": "Fetch AWS VPCs.", "parameters": {"type": "object", "properties": {}}}},
     {"type": "function", "function": {"name": "get_storage_status", "description": "Fetch S3 buckets.", "parameters": {"type": "object", "properties": {}}}},
     {"type": "function", "function": {"name": "get_iam_roles", "description": "Fetch IAM roles.", "parameters": {"type": "object", "properties": {}}}},
@@ -512,15 +508,23 @@ async def chat(request: ChatRequest):
             pending_confirmations.clear()
             return {"reply": "❌ Operation cancelled.", "source": "agent"}
 
-    # 1. Strict Intent Classification & Guardrails against Conversational Hallucination
     conversational_greetings = ["hello", "hi", "hey", "greetings", "thanks", "thank you", "ok", "okay", "bye"]
     informational_triggers = ["what is", "how does", "explain", "tell me about", "show me status", "status of", "running services"]
     
     if p_lower in conversational_greetings:
         return {"reply": "Hello! I am your AI Infrastructure SRE Assistant. How can I help you manage your cluster today?", "source": "agent"}
 
+    # Handle instance queries directly by fetching ec2 resources
+    if any(k in p_lower for k in ["instance", "instances", "vm", "servers running", "running instances"]):
+        tool_res = execute_agent_tool("get_ec2_instances", {})
+        total_items = tool_res.get("total", 0)
+        items = tool_res.get("items", [])
+        return {
+            "reply": f"Found **{total_items}** EC2 instance(s) in the inventory:\n```json\n{json.dumps(items, indent=2)}\n```",
+            "source": "agent"
+        }
+
     if any(p_lower.startswith(trig) for trig in informational_triggers) or "status" in p_lower:
-        # Route to informational response or inspection tools without running lifecycle mutations
         if "nginx" in p_lower and "status" in p_lower:
             return {"reply": f"**Nginx Status**: Currently **{service_states.get('nginx', 'unknown')}** on Port 80.", "source": "agent"}
         return {"reply": "I'm monitoring your AWS infrastructure and host services. You can ask me to inspect instances, check metrics, or restart/stop services.", "source": "agent"}
@@ -531,9 +535,8 @@ async def chat(request: ChatRequest):
         cores_val = metrics["cpu"]["cores"]
         return {"reply": f"Current CPU utilization is **{cpu_val}%** across **{cores_val}** cores.", "source": "agent"}
 
-    # 2. Intent Filtering for Lifecycle Actions
     is_lifecycle_intent = any(act in p_lower for act in ["restart", "start", "stop"])
-    if not is_lifecycle_intent and not any(tool_kw in p_lower for tool_kw in ["log", "refresh", "metric", "vpc", "s3", "ec2", "iam"]):
+    if not is_lifecycle_intent and not any(tool_kw in p_lower for tool_kw in ["log", "refresh", "metric", "vpc", "s3", "ec2", "iam", "instance"]):
         return {"reply": f"I understand you said: \"{user_prompt}\". How can I assist you with your infrastructure or services today?", "source": "agent"}
 
     messages = [{"role": "system", "content": "You are CloudOps AI SRE Assistant. Only invoke tools when explicit actionable commands are given. Never invoke lifecycle tools for greetings or chat."}]
@@ -556,7 +559,6 @@ async def chat(request: ChatRequest):
                         t_name = fn.get("name")
                         t_args = fn.get("arguments", {})
 
-                        # Double check that 'hello' or arbitrary strings are never passed as service_id
                         if t_name == "control_service_lifecycle":
                             svc_id = str(t_args.get("service_id", "")).lower().strip()
                             if svc_id not in service_states:
@@ -569,7 +571,7 @@ async def chat(request: ChatRequest):
                         if status_str == "success" and (is_verified or t_name != "control_service_lifecycle"):
                             reply_text = f"✅ **Action Executed & Verified**\n- **Tool:** `{t_name}`\n- **Verification:** Passed\n- **Current State:** Active / Running\n```json\n{json.dumps(tool_res, indent=2)}\n```"
                         elif status_str == "failed" or (t_name == "control_service_lifecycle" and not is_verified):
-                            reply_text = f"❌ **Verification Failed**\n- **Tool:** `{t_name}`\n- **Verification:** Failed\n- **Current State:** Inactive / Error\n```json\n{json.dumps(tool_res, indent=2)}\n```"
+                            reply_text = f"❌ **Verification Failed**\n- **Tool:** `{t_name}`\n- **Verification:** Failed\n- **CurrentState:** Inactive / Error\n```json\n{json.dumps(tool_res, indent=2)}\n```"
                         else:
                             reply_text = f"Executed **{t_name}** successfully.\n```json\n{json.dumps(tool_res, indent=2)}\n```"
 
