@@ -27,7 +27,7 @@ load_dotenv()
 app = FastAPI(
     title="AWS Infrastructure AI Assistant API",
     description="Dynamic CloudOps AI engine with comprehensive intent classification and verified lifecycles.",
-    version="4.1.0"
+    version="4.2.0"
 )
 
 app.add_middleware(
@@ -185,7 +185,7 @@ def get_top_procs(limit: int = 6):
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "4.1.0"}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "4.2.0"}
 
 @app.get("/metrics")
 def get_metrics():
@@ -295,7 +295,7 @@ def get_workspace_deployments():
             "name": svc.upper(),
             "port": ports.get(svc, 80),
             "runtime": "Systemd",
-            "commit": "v4.1-prod",
+            "commit": "v4.2-prod",
             "status": state,
             "uptime": "Active",
             "target_host": "Host Master"
@@ -514,7 +514,16 @@ async def chat(request: ChatRequest):
     if p_lower in conversational_greetings:
         return {"reply": "Hello! I am your AI Infrastructure SRE Assistant. How can I help you manage your cluster today?", "source": "agent"}
 
-    # Handle instance queries directly by fetching ec2 resources
+    # Handle memory / ram queries directly
+    if any(k in p_lower for k in ["memory", "ram", "usage"]):
+        metrics = get_metrics()
+        mem = metrics["memory"]
+        return {
+            "reply": f"Current Memory Usage is **{mem['percent']}%** ({mem['used_gb']} GB used out of {mem['total_gb']} GB total).",
+            "source": "agent"
+        }
+
+    # Handle instance queries directly
     if any(k in p_lower for k in ["instance", "instances", "vm", "servers running", "running instances"]):
         tool_res = execute_agent_tool("get_ec2_instances", {})
         total_items = tool_res.get("total", 0)
@@ -529,14 +538,18 @@ async def chat(request: ChatRequest):
             return {"reply": f"**Nginx Status**: Currently **{service_states.get('nginx', 'unknown')}** on Port 80.", "source": "agent"}
         return {"reply": "I'm monitoring your AWS infrastructure and host services. You can ask me to inspect instances, check metrics, or restart/stop services.", "source": "agent"}
 
-    if any(k in p_lower for k in ["cpu", "core", "utilization", "processor", "load"]):
+    if any(k in p_lower for k in ["cpu", "core", "utilization", "processor", "load", "metrics", "check metrics"]):
         metrics = get_metrics()
         cpu_val = metrics["cpu"]["percent"]
         cores_val = metrics["cpu"]["cores"]
-        return {"reply": f"Current CPU utilization is **{cpu_val}%** across **{cores_val}** cores.", "source": "agent"}
+        mem = metrics["memory"]
+        return {
+            "reply": f"**System Metrics Summary**:\n- **CPU**: {cpu_val}% ({cores_val} cores)\n- **Memory**: {mem['percent']}% ({mem['used_gb']} / {mem['total_gb']} GB)\n- **Health Score**: {metrics['health']['score']}/100",
+            "source": "agent"
+        }
 
     is_lifecycle_intent = any(act in p_lower for act in ["restart", "start", "stop"])
-    if not is_lifecycle_intent and not any(tool_kw in p_lower for tool_kw in ["log", "refresh", "metric", "vpc", "s3", "ec2", "iam", "instance"]):
+    if not is_lifecycle_intent and not any(tool_kw in p_lower for tool_kw in ["log", "refresh", "metric", "vpc", "s3", "ec2", "iam", "instance", "ram", "memory"]):
         return {"reply": f"I understand you said: \"{user_prompt}\". How can I assist you with your infrastructure or services today?", "source": "agent"}
 
     messages = [{"role": "system", "content": "You are CloudOps AI SRE Assistant. Only invoke tools when explicit actionable commands are given. Never invoke lifecycle tools for greetings or chat."}]
@@ -571,7 +584,7 @@ async def chat(request: ChatRequest):
                         if status_str == "success" and (is_verified or t_name != "control_service_lifecycle"):
                             reply_text = f"✅ **Action Executed & Verified**\n- **Tool:** `{t_name}`\n- **Verification:** Passed\n- **Current State:** Active / Running\n```json\n{json.dumps(tool_res, indent=2)}\n```"
                         elif status_str == "failed" or (t_name == "control_service_lifecycle" and not is_verified):
-                            reply_text = f"❌ **Verification Failed**\n- **Tool:** `{t_name}`\n- **Verification:** Failed\n- **CurrentState:** Inactive / Error\n```json\n{json.dumps(tool_res, indent=2)}\n```"
+                            reply_text = f"❌ **Verification Failed**\n- **Tool:** `{t_name}`\n- **Verification:** Failed\n- **Current State:** Inactive / Error\n```json\n{json.dumps(tool_res, indent=2)}\n```"
                         else:
                             reply_text = f"Executed **{t_name}** successfully.\n```json\n{json.dumps(tool_res, indent=2)}\n```"
 
