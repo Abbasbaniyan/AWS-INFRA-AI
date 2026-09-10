@@ -308,7 +308,7 @@ function updateDashboardUI(data) {
     elements.networkRate.textContent = `${activeRate.toFixed(1)} KB/s`;
   }
   if (elements.networkTotals) {
-    elements.networkTotals.textContent = `↓ ${net.total_recv_mb ?? 0} MB | ↑ ${net.total_sent_mb ?? 0} MB`;
+    elements.networkTotals.textContent = `\u2193 ${net.total_recv_mb ?? 0} MB | \u2191 ${net.total_sent_mb ?? 0} MB`;
   }
 
   if (elements.systemUptime) elements.systemUptime.textContent = uptime.formatted || '0h 0m';
@@ -426,7 +426,7 @@ window.inspectDigitalTwinNode = function(nodeId) {
       <div>
         <span class="dt-section-title">NODE TELEMETRY & HEALTH</span>
         <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-glass); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:10px;">
-          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Operational Status</span><span class="health-pill healthy">● HEALTHY</span></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Operational Status</span><span class="health-pill healthy">\u25CF HEALTHY</span></div>
           <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Architecture Type</span><code>${(node.type || 'service').toUpperCase()}</code></div>
           <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">AWS Region</span><code>${node.region || 'eu-north-1'}</code></div>
         </div>
@@ -447,6 +447,37 @@ if (elements.closeDtDrawerBtn) {
   elements.closeDtDrawerBtn.addEventListener('click', () => {
     elements.digitalTwinDrawer.classList.remove('open');
   });
+}
+
+// -----------------------------------------------------------------------------
+// Action status stepper: Pending -> Executing -> Verifying -> Success/Failed
+// Used both by the AI Chat tool-execution UI and the Workspace Control
+// deployment buttons, from the same backend response shape
+// ({status, executed, verified, service_state, ...}).
+// -----------------------------------------------------------------------------
+function buildActionStepperHTML(actionResult, opts) {
+  opts = opts || {};
+  const executed = !!actionResult.executed;
+  const verified = actionResult.verified === true;
+  const finalStatus = actionResult.status || actionResult.final || 'unknown';
+  const isTerminal = ['success', 'failed', 'blocked', 'rejected', 'cancelled'].includes(finalStatus);
+
+  const steps = [
+    { label: 'Requested', cls: 'step-success' },
+    { label: 'Executed', cls: executed ? 'step-success' : (isTerminal ? 'step-failed' : 'step-pending') },
+    { label: 'Verified', cls: verified ? 'step-success' : (isTerminal ? 'step-failed' : 'step-pending') },
+    { label: finalStatus === 'success' ? 'Success' : (finalStatus.charAt(0).toUpperCase() + finalStatus.slice(1)),
+      cls: finalStatus === 'success' ? 'step-success' : 'step-failed' }
+  ];
+
+  const stateLabel = actionResult.service_state ? `<span class="step-current-state">Current state: <strong>${actionResult.service_state}</strong></span>` : '';
+
+  return `
+    <div class="action-stepper ${opts.compact ? 'compact' : ''}">
+      ${steps.map(s => `<span class="step-pill ${s.cls}">${s.label}</span>`).join('<span class="step-arrow">\u2192</span>')}
+      ${stateLabel}
+    </div>
+  `;
 }
 
 // AI Assistant Integration
@@ -477,7 +508,7 @@ async function sendAiMessage() {
     const data = await res.json();
     removeMessageById(loadingId);
 
-    const replyContent = data.reply || 'Action executed successfully.';
+    const replyContent = data.reply || 'No response text was returned.';
     if (data.ui_action) {
       const action = data.ui_action;
       if (action.type === 'REFRESH_DASHBOARD') dispatchGlobalRefresh();
@@ -491,13 +522,29 @@ async function sendAiMessage() {
       }
     }
 
-    appendChatMessage('assistant', replyContent);
+    // If this turn involved a real infrastructure action (service lifecycle
+    // or a destructive AWS action), show the Requested/Executed/Verified/
+    // Final stepper above the AI's explanation, driven by the backend's
+    // action_status -- never fabricated on the frontend.
+    const stepperHTML = data.action_status ? buildActionStepperHTML({
+      executed: data.action_status.executed,
+      verified: data.action_status.verified,
+      service_state: data.action_status.service_state,
+      status: data.action_status.final
+    }) : '';
+
+    appendChatMessage('assistant', replyContent, stepperHTML);
+    if (data.action_status && (data.action_status.final === 'success' || data.action_status.final === 'failed')) {
+      // A real action resolved -- refresh the affected dashboard sections so
+      // the rest of the UI can never show stale state after this turn.
+      Promise.all([fetchWorkspaceDeployments(), fetchWorkspaceSummary(), fetchLogs(), fetchWorkspaceActivity()]);
+    }
     state.chatHistory.push({ role: 'user', content: text });
     state.chatHistory.push({ role: 'assistant', content: replyContent });
   } catch (err) {
     console.error('Chat error:', err);
     removeMessageById(loadingId);
-    appendChatMessage('assistant', '⚠️ Unable to connect to backend AI agent.');
+    appendChatMessage('assistant', '\u26A0\uFE0F Unable to connect to backend AI agent.');
   } finally {
     elements.aiChatInput.disabled = false;
     elements.sendAiChatBtn.disabled = false;
@@ -505,12 +552,12 @@ async function sendAiMessage() {
   }
 }
 
-function appendChatMessage(role, content) {
+function appendChatMessage(role, content, extraHTML) {
   const msgDiv = document.createElement('div');
   msgDiv.className = `chat-message ${role}`;
   msgDiv.innerHTML = `
     <div class="message-avatar"><i data-lucide="${role === 'assistant' ? 'bot' : 'user'}"></i></div>
-    <div class="message-content">${formatMarkdown(content)}</div>
+    <div class="message-content">${extraHTML || ''}${formatMarkdown(content)}</div>
   `;
   elements.aiChatMessages.appendChild(msgDiv);
   elements.aiChatMessages.scrollTop = elements.aiChatMessages.scrollHeight;
@@ -618,10 +665,10 @@ function renderWorkspaceServersUI(servers) {
           </div>
           <div>
             <div class="server-node-name">${s.name}</div>
-            <div class="server-node-role">${s.role} • <code>${s.id}</code></div>
+            <div class="server-node-role">${s.role} \u2022 <code>${s.id}</code></div>
           </div>
         </div>
-        <span class="health-pill ${s.state === 'running' ? 'healthy' : 'critical'}">● ${s.state.toUpperCase()}</span>
+        <span class="health-pill ${s.state === 'running' ? 'healthy' : 'critical'}">\u25CF ${s.state.toUpperCase()}</span>
       </div>
       <div class="server-metric-row">
         <div class="server-metric-labels"><span style="color: var(--text-secondary);">CPU Utilization</span><strong>${s.cpu_percent}% (${s.cpu_cores} vCPU)</strong></div>
@@ -632,7 +679,7 @@ function renderWorkspaceServersUI(servers) {
         <div class="mini-progress-bar"><div class="progress-bar-inner bg-purple" style="width: ${Math.min(s.memory_percent, 100)}%;"></div></div>
       </div>
       <div class="server-info-matrix">
-        <div class="server-info-item"><span class="server-info-title">Type & Zone</span><span class="server-info-val">${s.type} • ${s.az}</span></div>
+        <div class="server-info-item"><span class="server-info-title">Type & Zone</span><span class="server-info-val">${s.type} \u2022 ${s.az}</span></div>
         <div class="server-info-item"><span class="server-info-title">Uptime</span><span class="server-info-val">${s.uptime}</span></div>
       </div>
     `;
@@ -669,7 +716,7 @@ function renderWorkspaceModelsUI(models) {
       <td><span class="badge-status-pill">${m.parameter_size || '0.5B'}</span></td>
       <td><code>${m.quantization_level || 'Q4'}</code></td>
       <td>${m.size_mb || 394} MB</td>
-      <td><span class="model-status-badge ${m.is_active ? 'in-memory' : 'idle'}">● ${m.status}</span></td>
+      <td><span class="model-status-badge ${m.is_active ? 'in-memory' : 'idle'}">\u25CF ${m.status}</span></td>
       <td><strong style="color:var(--accent-cyan);">${m.ram_allocation_mb || 390} MB</strong></td>
       <td><span style="font-size:0.75rem; color:var(--text-muted);">${m.server || 'Host'}</span></td>
       <td>
@@ -718,20 +765,34 @@ async function fetchWorkspaceDeployments() {
 function renderWorkspaceDeploymentsUI(deployments) {
   if (!elements.workspaceDeploymentsTableBody) return;
   elements.workspaceDeploymentsTableBody.innerHTML = '';
+  const liveCount = deployments.filter(d => d.status === 'active').length;
   if (elements.wsDeploymentsCountBadge) {
-    elements.wsDeploymentsCountBadge.textContent = `${deployments.length} Services Live`;
+    elements.wsDeploymentsCountBadge.textContent = `${liveCount}/${deployments.length} Services Live`;
   }
 
   deployments.forEach(d => {
     const tr = document.createElement('tr');
+    tr.id = `deploy-row-${d.service}`;
+    const isUnreachable = d.reachable === false;
+    const stateLabel = isUnreachable ? 'UNAVAILABLE' : (d.status || 'unknown').toUpperCase();
+    // NOTE: the backend now reports the real systemd state (active/inactive/
+    // failed/not_found/unavailable) rather than the old simulated
+    // "running"/"stopped" strings, so the healthy check is updated to match
+    // 'active' -- otherwise every real service would incorrectly render red.
+    const stateClass = (!isUnreachable && d.status === 'active') ? 'healthy' : 'critical';
     tr.innerHTML = `
       <td><strong>${d.name || d.service}</strong></td>
-      <td><code>:${d.port || 80}</code></td>
-      <td><span class="badge-status-pill">${d.commit || 'active'}</span></td>
-      <td><span class="health-pill ${d.status === 'running' ? 'healthy' : 'critical'}">● ${d.status.toUpperCase()}</span></td>
-      <td>${d.uptime || 'Active'}</td>
+      <td><code>:${d.port || '-'}</code></td>
+      <td><span class="badge-status-pill">${d.runtime || 'systemd'}</span></td>
+      <td><span class="health-pill ${stateClass}">\u25CF ${stateLabel}</span></td>
+      <td>${d.uptime || '-'}</td>
       <td>
-        <button class="action-btn deploy-action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-cyan); color:var(--accent-cyan);" onclick="triggerDeploymentAction('${d.service}', 'restart', this)">Restart</button>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <button class="action-btn deploy-action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-cyan); color:var(--accent-cyan);" onclick="triggerDeploymentAction('${d.service}', 'restart', this)">Restart</button>
+          <button class="action-btn deploy-action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-emerald); color:var(--accent-emerald);" onclick="triggerDeploymentAction('${d.service}', 'start', this)">Start</button>
+          <button class="action-btn deploy-action-btn" style="padding:4px 10px; font-size:0.75rem; border-color:var(--accent-rose); color:var(--accent-rose);" onclick="triggerDeploymentAction('${d.service}', 'stop', this)">Stop</button>
+          <div class="deploy-stepper-slot" id="deploy-stepper-${d.service}"></div>
+        </div>
       </td>
     `;
     elements.workspaceDeploymentsTableBody.appendChild(tr);
@@ -740,7 +801,15 @@ function renderWorkspaceDeploymentsUI(deployments) {
 }
 
 window.triggerDeploymentAction = async function(serviceName, actionType, btnEl) {
-  if (btnEl) btnEl.disabled = true;
+  const row = document.getElementById(`deploy-row-${serviceName}`);
+  const stepperSlot = document.getElementById(`deploy-stepper-${serviceName}`);
+  const allButtons = row ? row.querySelectorAll('.deploy-action-btn') : (btnEl ? [btnEl] : []);
+  allButtons.forEach(b => b.disabled = true);
+
+  if (stepperSlot) {
+    stepperSlot.innerHTML = `<div class="action-stepper compact"><span class="step-pill step-success">Requested</span><span class="step-arrow">\u2192</span><span class="step-pill step-pending pulse">Executing\u2026</span></div>`;
+  }
+
   try {
     const res = await fetch('/api/workspace/deployments/action', {
       method: 'POST',
@@ -748,14 +817,20 @@ window.triggerDeploymentAction = async function(serviceName, actionType, btnEl) 
       body: JSON.stringify({ service_id: serviceName, action: actionType })
     });
     const data = await res.json();
+
+    if (stepperSlot) {
+      stepperSlot.innerHTML = buildActionStepperHTML(data, { compact: true });
+      setTimeout(() => { if (stepperSlot) stepperSlot.innerHTML = ''; }, 6000);
+    }
     if (data.status !== 'success') {
-      alert(`Verification Failed for ${serviceName}: ${data.error || 'Unknown error'}`);
+      console.warn(`Action not verified as successful for ${serviceName}:`, data.error || data);
     }
     await Promise.all([fetchLogs(), fetchWorkspaceDeployments(), fetchWorkspaceSummary(), fetchWorkspaceActivity()]);
   } catch (err) {
     console.error(`Deployment action ${actionType} failed:`, err);
+    if (stepperSlot) stepperSlot.innerHTML = `<span class="step-pill step-failed">Network Error</span>`;
   } finally {
-    if (btnEl) btnEl.disabled = false;
+    allButtons.forEach(b => b.disabled = false);
   }
 };
 
@@ -892,7 +967,7 @@ async function fetchIncidents() {
       el.style.cssText = 'border-bottom:1px solid rgba(255,255,255,0.06); padding:8px 0; font-size:0.8rem;';
       el.innerHTML = `
         <div style="display:flex; justify-content:space-between;">
-          <strong style="color:var(--accent-emerald);">⚡ Action: ${inc.action} (${inc.target})</strong>
+          <strong style="color:var(--accent-emerald);">\u26A1 Action: ${inc.action} (${inc.target})</strong>
           <span style="color:var(--text-muted);">${inc.end_time}</span>
         </div>
         <div style="color:var(--text-secondary); margin-top:2px;">${inc.details}</div>
