@@ -1287,8 +1287,31 @@ async def chat(request: ChatRequest):
 
         else:
             tool_res = execute_agent_tool(t_name, t_args)
-            reply_text = f"**{t_name}** result:\n```json\n{json.dumps(tool_res, indent=2)}\n```"
-            return {"reply": reply_text, "ui_action": tool_res.get("ui_action"), "source": "agent"}
+
+            if t_name == "check_infrastructure_health":
+                if tool_res.get("status") == "success":
+                    reply_text = (
+                        f"**Infrastructure Health:** {tool_res.get('health_label', 'Healthy')}\n\n"
+                        f"Health score: **{tool_res.get('health_score', 'N/A')}/100**"
+                    )
+                else:
+                    reply_text = (
+                        f"⚠️ Infrastructure health check failed: "
+                        f"{tool_res.get('error', 'Unknown error')}"
+                    )
+            else:
+                reply_text = (
+                    tool_res.get("message")
+                    or tool_res.get("error")
+                    or "Tool executed successfully."
+                )
+
+            return {
+                "reply": reply_text,
+                "ui_action": tool_res.get("ui_action"),
+                "source": "agent"
+            }
+            
 
     if content:
         return {"reply": content, "source": "agent"}
