@@ -391,24 +391,21 @@ function renderTopology(topology) {
       svgHtml += `<line x1="${sourceNode.x}" y1="${sourceNode.y}" x2="${targetNode.x}" y2="${targetNode.y}" stroke="rgba(56,189,248,0.35)" stroke-width="2.5" stroke-dasharray="6" style="pointer-events:none;"/>`;
     }
   });
-
-  // Draw nodes with an invisible hit-area circle to prevent flicker
-  nodes.forEach(n => {
-    svgHtml += `
-      <g class="topology-node" 
-         transform="translate(${n.x},${n.y})" 
-         onclick="inspectDigitalTwinNode('${n.id}')" 
-         style="cursor: pointer; pointer-events: bounding-box; transition: transform 0.2s ease;">
-        <!-- Invisible wide hit-box buffer prevents hover loop flicker -->
-        <circle r="38" fill="transparent" stroke="none" style="pointer-events: fill;" />
-        <!-- Visual node elements -->
-        <circle r="26" fill="#0b1329" stroke="#38bdf8" stroke-width="2.5" style="pointer-events: none;" />
-        <text text-anchor="middle" y="44" fill="#f8fafc" font-size="11" font-weight="700" font-family="var(--font-sans)" style="pointer-events: none; user-select: none;">${n.label}</text>
-        <circle r="6" fill="#10b981" cx="17" cy="-17" style="pointer-events: none;" />
-      </g>
-    `;
-  });
-
+nodes.forEach(n => {
+  svgHtml += `
+    <g class="topology-node" 
+       transform="translate(${n.x},${n.y})" 
+       onclick="inspectDigitalTwinNode('${n.id}')" 
+       style="cursor: pointer; pointer-events: all;">
+      <!-- Stable invisible hit-target: use opacity="0" instead of transparent -->
+      <circle r="42" fill="#000000" opacity="0" style="pointer-events: all;" />
+      <!-- Visual elements: completely decoupled from mouse hit testing -->
+      <circle class="node-circle" r="26" fill="#0b1329" stroke="#38bdf8" stroke-width="2.5" style="pointer-events: none; transition: stroke 0.2s ease, stroke-width 0.2s ease;" />
+      <text text-anchor="middle" y="44" fill="#f8fafc" font-size="11" font-weight="700" font-family="var(--font-sans)" style="pointer-events: none; user-select: none;">${n.label}</text>
+      <circle r="6" fill="#10b981" cx="17" cy="-17" style="pointer-events: none;" />
+    </g>
+  `;
+});
   svgHtml += '</g>';
   svg.innerHTML = svgHtml;
   initLucide();

@@ -469,3 +469,10 @@ body {
     min-width: 500px !important;
   }
 }
+
+/* USE THIS - Changes appearance without altering hit-testing boundaries */
+.topology-node:hover .node-circle {
+  stroke: #67e8f9;
+  stroke-width: 3.5px;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.6));
+}
